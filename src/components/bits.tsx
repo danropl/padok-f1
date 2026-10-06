@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from "react";
-import type { Compound, Load } from "../lib/data";
+import { SNAPSHOT_ONLY, type Compound, type Load } from "../lib/data";
 
 export const COMPOUND_LABEL: Record<Compound, string> = {
   soft: "Miękka",
@@ -85,7 +85,9 @@ export function DataGate<T>({ load, children }: { load: Load<T>; children: (data
     <>
       {load.fromSnapshot && (
         <p className="data-note" role="status">
-          Baza chwilowo nie odpowiada, więc pokazujemy ostatnią zapisaną kopię danych. Wyniki mogą być nieaktualne.
+          {SNAPSHOT_ONLY
+            ? "To podgląd strony z kopią danych zapisaną przy budowaniu. Opublikowana strona czyta bazę na bieżąco."
+            : "Baza chwilowo nie odpowiada, więc pokazujemy ostatnią zapisaną kopię danych. Wyniki mogą być nieaktualne."}
         </p>
       )}
       {children(load.data)}

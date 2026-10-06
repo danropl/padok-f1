@@ -2,11 +2,11 @@
    Bez gradientów, bez szkła, bez miękkich cieni. Hierarchię robi typografia i grubość linii. */
 
 :root {
-  --paper: #f4f1ea;
-  --surface: #fbfaf6;
+  --paper: #e8e9e5;
+  --surface: #f4f5f2;
   --ink: #1b1d21;
-  --muted: #565a62;
-  --line: #d6cfc0;
+  --muted: #4f535a;
+  --line: #c8cbc3;
   --soft: #c41a2b;
   --soft-ink: #ffffff;
   --medium: #f2b705;

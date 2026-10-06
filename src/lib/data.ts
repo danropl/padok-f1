@@ -151,7 +151,9 @@ function loadSnapshot() {
   return snapshot;
 }
 
-let liveDown = false;
+// Build podglądowy (np. w sandboksie bez dostępu do sieci) od razu korzysta z kopii danych.
+export const SNAPSHOT_ONLY = import.meta.env.VITE_SNAPSHOT_ONLY === "1";
+let liveDown = SNAPSHOT_ONLY;
 const cache = new Map<TableName, Promise<{ rows: unknown[]; fromSnapshot: boolean }>>();
 
 // Klient Supabase ponawia nieudane zapytania, więc przy niedostępnej bazie przerywamy po kilku sekundach.
