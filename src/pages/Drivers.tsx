@@ -1,12 +1,12 @@
 import { Link, useParams } from "react-router-dom";
-import { DataGate, PageHead, TeamSwatch } from "../components/bits";
-import { byId, fullName, useTables } from "../lib/data";
+import { Credit, DataGate, PageHead, Picture, TeamSwatch, WikiExtract } from "../components/bits";
+import { byId, fullName, useTables, type DriverProfile } from "../lib/data";
 import { age, country, finishLabel, raceName } from "../lib/format";
 import { useTitle } from "../lib/title";
 
 export function Drivers() {
   useTitle("Kierowcy");
-  const load = useTables("driver_standings", "drivers", "constructors");
+  const load = useTables("driver_standings", "drivers", "constructors", "driver_profiles");
   return (
     <article>
       <PageHead kicker="Kierowcy" title="Kto jeździ w tym sezonie">
@@ -16,8 +16,9 @@ export function Drivers() {
         </p>
       </PageHead>
       <DataGate load={load}>
-        {([standings, drivers, constructors]) => {
+        {([standings, drivers, constructors, profiles]) => {
           const dMap = byId(drivers, "driver_id");
+          const pMap = byId(profiles, "driver_id");
           const cMap = byId(constructors, "constructor_id");
           const rows = [...standings].sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
           return (
@@ -26,15 +27,21 @@ export function Drivers() {
                 const d = dMap.get(s.driver_id);
                 const t = s.constructor_id ? cMap.get(s.constructor_id) : undefined;
                 if (!d) return null;
+                const photo = pMap.get(d.driver_id)?.image_url ?? null;
                 return (
                   <li key={d.driver_id} className="driver-row" style={{ ["--team" as string]: t?.team_colour ? `#${t.team_colour}` : "var(--line)" }}>
                     <span className="driver-row__pos" aria-label={`Miejsce ${s.position}`}>{s.position}</span>
-                    <span className="driver-row__num" aria-hidden="true">{d.permanent_number ?? ""}</span>
+                    {photo ? (
+                      <Picture src={photo} alt="" className="driver-row__photo" />
+                    ) : (
+                      <span className="driver-row__num" aria-hidden="true">{d.permanent_number ?? ""}</span>
+                    )}
                     <div className="driver-row__main">
                       <Link to={`/kierowcy/${d.driver_id}`} className="driver-row__name">
                         {d.given_name} <strong>{d.family_name}</strong>
                       </Link>
                       <span className="driver-row__meta">
+                        {photo && d.permanent_number ? `#${d.permanent_number} · ` : ""}
                         {t?.name} · {country(d.nationality)}
                       </span>
                     </div>
@@ -55,10 +62,10 @@ export function Drivers() {
 
 export function DriverPage() {
   const { id } = useParams();
-  const load = useTables("drivers", "driver_standings", "constructors", "race_results", "races");
+  const load = useTables("drivers", "driver_standings", "constructors", "race_results", "races", "driver_profiles");
   return (
     <DataGate load={load}>
-      {([drivers, standings, constructors, results, races]) => {
+      {([drivers, standings, constructors, results, races, profiles]) => {
         const d = drivers.find((x) => x.driver_id === id);
         if (!d) return <NotFoundInline what="kierowcy" back="/kierowcy" />;
         const s = standings.find((x) => x.driver_id === id);
@@ -80,6 +87,7 @@ export function DriverPage() {
             best={best}
             mine={mine}
             rMap={rMap}
+            profile={profiles.find((p) => p.driver_id === id)}
             mate={mate && mateDriver ? { id: mateDriver.driver_id, name: fullName(mateDriver), points: mate.points } : undefined}
           />
         );
@@ -98,12 +106,16 @@ function DriverView(props: {
   mine: import("../lib/data").RaceResult[];
   rMap: Map<number, import("../lib/data").Race>;
   mate?: { id: string; name: string; points: number };
+  profile?: DriverProfile;
 }) {
-  const { name, d, team, s, podiums, best, mine, rMap, mate } = props;
+  const { name, d, team, s, podiums, best, mine, rMap, mate, profile } = props;
   useTitle(name);
   return (
     <article className="driver" style={{ ["--team" as string]: team?.team_colour ? `#${team.team_colour}` : "var(--ink)" }}>
-      <header className="driver__head">
+      <header className={`driver__head${profile?.image_url ? " driver__head--photo" : ""}`}>
+        {profile?.image_url && (
+          <Picture src={profile.image_url} alt={`${name}, zdjęcie portretowe`} className="driver__photo" />
+        )}
         <p className="kicker">
           <Link to="/kierowcy">Kierowcy</Link> / {team?.name ?? "bez zespołu w tym sezonie"}
         </p>
@@ -113,6 +125,9 @@ function DriverView(props: {
         {d.permanent_number && <p className="driver__bignum" aria-label={`Numer startowy ${d.permanent_number}`}>{d.permanent_number}</p>}
       </header>
 
+      {profile && <Career p={profile} />}
+
+      <h2>Sezon {s?.season ?? ""}</h2>
       <dl className="stats">
         <div><dt>Miejsce w sezonie</dt><dd>{s?.position ?? "–"}</dd></div>
         <div><dt>Punkty</dt><dd>{s?.points ?? 0}</dd></div>
@@ -166,17 +181,52 @@ function DriverView(props: {
           </table>
         </div>
       )}
-      {d.wiki_url && (
+      {profile && <WikiExtract text={profile.wiki_extract} url={profile.wiki_url} />}
+      {!profile?.wiki_url && d.wiki_url && (
         <p className="small">
           Więcej o karierze: <a href={d.wiki_url} rel="noopener">{name} w Wikipedii (po angielsku)</a>
         </p>
       )}
+      {profile && <Credit c={profile} what="Zdjęcie" />}
       {team && (
         <p className="small">
           <TeamSwatch colour={team.team_colour} /> <Link to="/zespoly">{team.name} w klasyfikacji zespołów</Link>
         </p>
       )}
     </article>
+  );
+}
+
+// Skrót kariery: tekst i liczby składa skrypt sync-profiles z wyników Jolpica-F1, więc po transferze
+// albo kolejnym wyścigu opis zmienia się sam.
+function Career({ p }: { p: DriverProfile }) {
+  const st = p.stats;
+  return (
+    <section className="career" aria-labelledby="career-title">
+      <h2 id="career-title">Kariera w skrócie</h2>
+      <p className="career__summary">{p.summary}</p>
+      <dl className="stats stats--career">
+        <div><dt>Starty</dt><dd>{st.starts}</dd></div>
+        <div><dt>Zwycięstwa</dt><dd>{st.wins}</dd></div>
+        <div><dt>Podia</dt><dd>{st.podiums}</dd></div>
+        <div><dt>Pole position</dt><dd>{st.poles}</dd></div>
+        <div><dt>Tytuły</dt><dd>{st.titles.length}</dd></div>
+      </dl>
+      {st.career.length > 0 && (
+        <ol className="stints" aria-label="Zespoły w karierze">
+          {st.career.map((c, i) => (
+            <li key={`${c.team}-${c.from}-${i}`}>
+              <span className="stints__years">{c.from === c.to ? c.from : `${c.from}–${String(c.to).slice(2)}`}</span>
+              <span className="stints__team">{c.team}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="small muted">
+        Opis składa się automatycznie z wyników F1 i odświeża po każdym wyścigu oraz po zmianie zespołu (ostatnio{" "}
+        {new Date(p.updated_at).toLocaleDateString("pl-PL")}).
+      </p>
+    </section>
   );
 }
 

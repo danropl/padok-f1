@@ -816,6 +816,14 @@ mark.placeholder {
   line-height: 1;
   color: var(--muted);
 }
+.driver-row__photo {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: cover;
+  object-position: 50% 18%;
+  background: var(--surface);
+  border-radius: 0;
+}
 .driver-row__main {
   display: flex;
   flex-direction: column;
@@ -847,6 +855,84 @@ mark.placeholder {
 }
 .driver__family {
   display: block;
+}
+.driver__head--photo {
+  display: grid;
+  grid-template-columns: clamp(6.5rem, 26vw, 11rem) minmax(0, 1fr);
+  column-gap: clamp(1rem, 3vw, 2rem);
+  align-items: end;
+}
+.driver__head--photo > :not(.driver__photo) {
+  grid-column: 2;
+}
+.driver__photo {
+  grid-row: 1 / span 3;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  object-position: 50% 20%;
+  background: var(--surface);
+  display: block;
+}
+
+.career {
+  margin-bottom: 2.5rem;
+}
+.career__summary {
+  max-width: 46rem;
+  font-size: 1.2rem;
+}
+.stats--career dd {
+  color: var(--ink);
+}
+.stints {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-left: 1px solid var(--line);
+}
+.stints li {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.9rem 0.35rem 0.6rem;
+  border-right: 1px solid var(--line);
+  border-top: 3px solid var(--ink);
+}
+.stints li:last-child {
+  border-top-color: var(--team);
+}
+.stints__years {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.stints__team {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+}
+
+.wiki-extract {
+  margin: 2rem 0;
+  max-width: 46rem;
+}
+.wiki-extract blockquote {
+  margin: 0;
+  padding-left: 1rem;
+  border-left: 4px solid var(--line);
+  font-style: italic;
+}
+.wiki-extract figcaption,
+.credit {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.credit {
+  margin-top: 0.5rem;
 }
 .driver__bignum {
   position: absolute;
@@ -931,9 +1017,22 @@ mark.placeholder {
   height: 100%;
   background: var(--team);
 }
+.team__name a {
+  text-decoration: none;
+}
+.team__name a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+.team__body {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: 2.75rem;
+}
 .team__meta,
 .team__drivers {
-  margin: 0 0 0 2.75rem;
+  margin: 0;
   font-size: 0.95rem;
   color: var(--muted);
 }
@@ -944,6 +1043,119 @@ mark.placeholder {
   flex-wrap: wrap;
   gap: 0 1.5rem;
   color: var(--ink);
+}
+
+/* Loga są zwykle ciemne na przezroczystym tle, więc zawsze stoją na jasnej płytce, także w trybie ciemnym. */
+.logo-plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  padding: 0.6rem 0.9rem;
+  width: clamp(7rem, 22vw, 11rem);
+  height: clamp(4rem, 12vw, 6rem);
+  flex-shrink: 0;
+}
+.logo-plate img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.logo-plate--small {
+  width: 5.5rem;
+  height: 3rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.team-page__head {
+  border-bottom: 8px solid var(--team);
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+}
+.team-page__title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.team-page__title h1 {
+  margin-bottom: 0.25rem;
+}
+.team-page__official {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin: 0;
+  border-top: 2px solid var(--ink);
+}
+.facts > div {
+  padding: 0.7rem 1rem 0.7rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.facts dt {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.facts__note {
+  max-width: 46rem;
+}
+.lineup {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.lineup__card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  text-decoration: none;
+  border-left: 5px solid var(--team);
+  background: var(--surface);
+  padding: 0.6rem 0.8rem;
+}
+.lineup__card > span {
+  display: flex;
+  flex-direction: column;
+}
+.lineup__photo {
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+.lineup__num {
+  width: 4rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 2.2rem;
+  text-align: center;
+  color: var(--team);
+}
+.lineup__name {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.3rem;
+  text-transform: uppercase;
+}
+.lineup__card:hover .lineup__name {
+  text-decoration: underline;
 }
 
 /* ---------- kalendarz ---------- */

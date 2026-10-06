@@ -118,6 +118,57 @@ export interface PointsRow {
   position: number;
   points: number;
 }
+// Wspólne pola zdjęcia/logo: kopia z Wikimedia Commons w naszym Storage plus dane do podpisu.
+export interface ImageCredit {
+  image_url: string | null;
+  image_page: string | null;
+  image_author: string | null;
+  image_license: string | null;
+  image_license_url: string | null;
+}
+export interface Stint {
+  team: string;
+  from: number;
+  to: number;
+}
+export interface DriverProfile extends ImageCredit {
+  driver_id: string;
+  summary: string;
+  stats: {
+    starts: number;
+    wins: number;
+    podiums: number;
+    poles: number;
+    seasons: number;
+    titles: number[];
+    career: Stint[];
+  };
+  current_team: string | null;
+  wiki_extract: string | null;
+  wiki_url: string | null;
+  updated_at: string;
+}
+export interface TeamProfile extends ImageCredit {
+  constructor_id: string;
+  summary: string;
+  stats: {
+    entries: number;
+    wins: number;
+    podiums: number;
+    poles: number;
+    first_race: { season: number; name: string } | null;
+    constructor_titles: number[];
+    driver_titles: number;
+  };
+  official_name: string | null;
+  sponsors: string[];
+  base: string | null;
+  principal: string | null;
+  previous_names: string[];
+  wiki_extract: string | null;
+  wiki_url: string | null;
+  updated_at: string;
+}
 export interface SyncRun {
   finished_at: string | null;
   ok: boolean | null;
@@ -138,6 +189,8 @@ export interface Tables {
   milestones: Milestone;
   points_system: PointsRow;
   sync_runs: SyncRun;
+  driver_profiles: DriverProfile;
+  team_profiles: TeamProfile;
 }
 export type TableName = keyof Tables;
 

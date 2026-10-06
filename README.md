@@ -24,3 +24,11 @@ Workflow `.github/workflows/pages.yml` buduje stronę i publikuje ją na GitHub 
 ## Przed publikacją
 
 Uzupełnij dane właściciela w `src/site.ts` (nazwa, adres, NIP, e-mail) i nazwę hostingu w polityce prywatności (`src/pages/Legal.tsx`). Do tego czasu strona pokazuje je jako wyróżnione pola do uzupełnienia.
+
+## Profile kierowców i zespołów
+
+Funkcja `supabase/functions/sync-profiles` (pg_cron co 3 godziny) składa opisy karier i zespołów z wyników Jolpica-F1
+i infoboksów Wikipedii, dodaje wstęp z polskiej Wikipedii (CC BY-SA 4.0) oraz zdjęcia i loga z Wikimedia Commons.
+Bierze tylko pliki na wolnych licencjach i kopiuje je do publicznego kubełka `media` w Supabase Storage.
+Profil odświeża się po każdym wyścigu, po zmianie zespołu lub składu i najpóźniej co tydzień.
+Ręczne uruchomienie: `select private.trigger_profiles();`

@@ -1,5 +1,5 @@
-import { Fragment, type ReactNode } from "react";
-import { SNAPSHOT_ONLY, type Compound, type Load } from "../lib/data";
+import { Fragment, useState, type ReactNode } from "react";
+import { SNAPSHOT_ONLY, type Compound, type ImageCredit, type Load } from "../lib/data";
 
 export const COMPOUND_LABEL: Record<Compound, string> = {
   soft: "Miękka",
@@ -113,5 +113,41 @@ export function PageHead({ kicker, title, children }: { kicker: string; title: s
       <h1>{title}</h1>
       {children && <div className="page-head__lede">{children}</div>}
     </header>
+  );
+}
+
+// Zdjęcia i loga pochodzą z Wikimedia Commons (wolne licencje) i leżą w naszym Supabase Storage.
+// Gdy obraz się nie wczyta (np. podgląd bez sieci), znika zamiast zostawiać pustą ramkę.
+export function Picture({ src, alt, className }: { src: string | null; alt: string; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return null;
+  return <img src={src} alt={alt} className={className} loading="lazy" decoding="async" onError={() => setBroken(true)} />;
+}
+
+// Podpis wymagany przez licencje CC: autor, licencja z linkiem, źródło.
+export function Credit({ c, what }: { c: ImageCredit; what: string }) {
+  if (!c.image_url || !c.image_page) return null;
+  return (
+    <p className="credit">
+      {what}: {c.image_author ?? "autor nieznany"},{" "}
+      {c.image_license_url ? <a href={c.image_license_url} rel="noopener license">{c.image_license}</a> : c.image_license},{" "}
+      <a href={c.image_page} rel="noopener">Wikimedia Commons</a>
+    </p>
+  );
+}
+
+// Wstęp z polskiej Wikipedii na licencji CC BY-SA 4.0, zawsze z linkiem do artykułu.
+export function WikiExtract({ text, url }: { text: string | null; url: string | null }) {
+  if (!text || !url) return null;
+  return (
+    <figure className="wiki-extract">
+      <blockquote cite={url}>
+        <p>{text}</p>
+      </blockquote>
+      <figcaption>
+        Fragment artykułu z <a href={url} rel="noopener">polskiej Wikipedii</a>, licencja{" "}
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.pl" rel="noopener license">CC BY-SA 4.0</a>.
+      </figcaption>
+    </figure>
   );
 }

@@ -67,7 +67,7 @@ export function Privacy() {
 
       <h2>Komu przekazujemy dane</h2>
       <ul>
-        <li>Supabase Inc.: baza danych i formularz. Dane są przechowywane w regionie UE (Frankfurt).</li>
+        <li>Supabase Inc.: baza danych, formularz i kopie zdjęć. Dane są przechowywane w regionie UE (Frankfurt).</li>
         <li>
           Dostawca hostingu strony: <V value="[NAZWA HOSTINGU, np. GitHub Pages]" />. Jeśli dostawca ma siedzibę poza
           EOG, przekazanie odbywa się na podstawie standardowych klauzul umownych lub decyzji o adekwatności (EU-US Data
@@ -229,12 +229,23 @@ export function About() {
         <li>
           <a href="https://openf1.org">OpenF1</a>: kolory zespołów.
         </li>
+        <li>
+          <a href="https://pl.wikipedia.org">Wikipedia</a>: wstępy do profili (licencja CC BY-SA 4.0, z linkiem do
+          artykułu), a z angielskiej wersji oficjalne nazwy zespołów, siedziby i szefowie.
+        </li>
+        <li>
+          <a href="https://commons.wikimedia.org">Wikimedia Commons</a>: zdjęcia kierowców i loga zespołów, wyłącznie
+          pliki na wolnych licencjach, każdy podpisany autorem i licencją. Kopie trzymamy na naszym serwerze, więc
+          oglądanie ich nie łączy Twojej przeglądarki z serwerami Wikimedia.
+        </li>
+        <li>Opisy karier i zespołów składa automatycznie nasz skrypt z powyższych danych.</li>
         <li>Teksty poradnika, słownika, historii i opisy serii: napisane przez nas.</li>
       </ul>
       <h2>Czego nie robimy</h2>
       <p>
-        Nie publikujemy zdjęć kierowców ani logotypów zespołów, bo należą do F1, zespołów i agencji fotograficznych. Nie
-        piszemy opinii „od fanów”, których nie dostaliśmy, i nie twierdzimy, że jesteśmy najlepsi w czymkolwiek.
+        Nie używamy zdjęć z oficjalnych serwisów F1 ani agencji fotograficznych, tylko pliki z wolną licencją. Jeśli
+        zespół nie udostępnił logo na takiej licencji, nie pokazujemy go wcale. Loga są znakami towarowymi zespołów i
+        służą tu tylko do ich rozpoznania. Nie piszemy opinii „od fanów”, których nie dostaliśmy, i nie twierdzimy, że jesteśmy najlepsi w czymkolwiek.
       </p>
       <h2>Przepisy, które sprawdziliśmy</h2>
       <ul>

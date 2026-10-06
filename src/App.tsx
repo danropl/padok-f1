@@ -9,7 +9,7 @@ import { History } from "./pages/History";
 import { Home } from "./pages/Home";
 import { About, Cookies, Privacy, Refunds, Terms } from "./pages/Legal";
 import { SeriesPage } from "./pages/SeriesPage";
-import { Teams } from "./pages/Teams";
+import { TeamPage, Teams } from "./pages/Teams";
 import { useTitle } from "./lib/title";
 
 // HashRouter: strona działa na statycznym hostingu (GitHub Pages) bez przepisywania adresów po stronie serwera.
@@ -25,6 +25,7 @@ export function App() {
           <Route path="kierowcy" element={<Drivers />} />
           <Route path="kierowcy/:id" element={<DriverPage />} />
           <Route path="zespoly" element={<Teams />} />
+          <Route path="zespoly/:id" element={<TeamPage />} />
           <Route path="serie" element={<SeriesPage />} />
           <Route path="historia" element={<History />} />
           <Route path="slownik" element={<Glossary />} />

@@ -8,6 +8,7 @@ const key = process.env.VITE_SUPABASE_KEY;
 const tables = [
   "drivers", "constructors", "circuits", "races", "race_results", "driver_standings",
   "constructor_standings", "champions", "guide_sections", "glossary", "series", "milestones", "points_system",
+  "driver_profiles", "team_profiles",
 ];
 
 const out = {};
