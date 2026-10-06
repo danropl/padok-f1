@@ -67,14 +67,16 @@ iframe {
   max-width: 100%;
 }
 
+/* Linki w tekście mają cienkie, szare podkreślenie (żeby dało się je odróżnić bez koloru),
+   które po najechaniu ciemnieje. Listy i nawigacja nie mają podkreśleń wcale. */
 a {
   color: inherit;
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.18em;
-  text-decoration-color: var(--soft);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--muted);
 }
 a:hover {
-  text-decoration-thickness: 3px;
+  text-decoration-color: currentColor;
 }
 
 :focus-visible {
@@ -162,7 +164,7 @@ p {
   align-items: center;
   gap: 1.5rem;
   padding: 0.75rem var(--gutter);
-  border-bottom: 6px solid var(--soft);
+  border-bottom: 1px solid #34363c;
 }
 @media (prefers-color-scheme: dark) {
   .site-head {
@@ -296,9 +298,9 @@ main {
   font: inherit;
   color: inherit;
   text-decoration: underline;
-  text-decoration-color: var(--soft);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 0.18em;
+  text-decoration-color: var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
   cursor: pointer;
 }
 
@@ -570,7 +572,7 @@ mark.placeholder {
 }
 .next-race a {
   color: #f4f1ea;
-  text-decoration-color: #f2b705;
+  text-decoration-color: #8d8a83;
 }
 @media (prefers-color-scheme: dark) {
   .next-race .kicker,
@@ -821,7 +823,7 @@ mark.placeholder {
 }
 .driver-row__name {
   font-size: 1.15rem;
-  text-decoration-color: var(--team);
+  text-decoration: none;
 }
 .driver-row__name strong {
   font-family: var(--display);
