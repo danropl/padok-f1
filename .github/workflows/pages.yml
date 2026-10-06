@@ -1,0 +1,46 @@
+name: Publikacja na GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Codziennie rano odświeżamy zapasową kopię danych w snapshot.json.
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://wkqtnfbhxdhzyhpbiihf.supabase.co' }}
+      VITE_SUPABASE_KEY: ${{ vars.VITE_SUPABASE_KEY || 'sb_publishable_TZS8sxyiLgtuB770dgKEJw_-5pcrrds' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/snapshot.mjs
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
