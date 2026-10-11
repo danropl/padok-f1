@@ -715,6 +715,7 @@
     this.cars.forEach(function (rec) {
       self.scene.remove(rec.root);
       rec.models.forEach(function (m) { try { if (C3 && C3.dispose) C3.dispose(m); } catch (e) { /* nic */ } });
+      if (rec.cockpit && PG.Cockpit3D) { try { PG.Cockpit3D.dispose(rec.cockpit); } catch (e2) { /* nic */ } }
     });
     this.cars.clear();
   };
@@ -745,9 +746,37 @@
         wallT: -9, hitT: -9, lv: lv, ph: RND() * 100
       });
     });
+    // wnętrze kokpitu tylko dla bolidu gracza (widoczne w kamerze z kokpitu)
+    var pr = S.player && this.cars.get(S.player);
+    if (pr && PG.Cockpit3D) {
+      try {
+        pr.cockpit = PG.Cockpit3D.build({ livery: S.player.team && S.player.team.livery, helmet: S.player.driver && S.player.driver.helmet, quality: q });
+        pr.body.add(pr.cockpit.root); pr.cockpitOn = false;
+      } catch (e) { console.warn('Kokpit 3D wyłączony:', e); pr.cockpit = null; }
+    }
     this.world.setWeather(S.env);
     this.cam.init = false; this.cam.tv = -1;
     this.S = S;
+  };
+
+  // Kokpit: szczegółowe wnętrze zamiast uproszczonej kierownicy, gdy kamera jest w bolidzie gracza
+  V.syncCockpit = function (S, focus, o, dt) {
+    var p = S.player, rec = p && this.cars.get(p);
+    if (!rec || !rec.cockpit) return;
+    var on = this.cam.mode === 'cockpit' && focus === p && !o.lookBack;
+    if (on !== rec.cockpitOn) {
+      rec.cockpitOn = on;
+      PG.Cockpit3D.setVisible(rec.cockpit, on);
+      var u = rec.lod && rec.lod.userData;
+      if (u && u.steerWheel) u.steerWheel.visible = !on;
+    }
+    if (!on) return;
+    try { PG.Cockpit3D.update(rec.cockpit, p, S, dt); }
+    catch (e) {
+      console.warn('Kokpit 3D wyłączony:', e);
+      PG.Cockpit3D.setVisible(rec.cockpit, false); rec.cockpit = null;
+      var u2 = rec.lod && rec.lod.userData; if (u2 && u2.steerWheel) u2.steerWheel.visible = true;
+    }
   };
 
   V.syncCars = function (S, dt) {
@@ -1310,11 +1339,12 @@
     } else if (mode === 'tcam' || mode === 'cockpit') {
       var tc = mode === 'tcam';
       var hf = h + (o.lookBack ? Math.PI : 0), ffx = Math.cos(hf), ffz = Math.sin(hf);
-      var along = tc ? -0.25 : 0.42, up = tc ? 1.12 : 0.74;
+      // z kokpitu: oczy kierowcy tuż pod halo, wzrok lekko w dół (kierownica u dołu kadru)
+      var along = tc ? -0.25 : 0.4, up = tc ? 1.12 : 0.755;
       if (o.lookBack) along = tc ? -0.6 : 0.2;
       tx = cx + Math.cos(h) * along; ty = up; tz = cz + Math.sin(h) * along;
-      lx = tx + ffx * 20; ly = up - (tc ? 0.9 : 0.6); lz = tz + ffz * 20;
-      fov = (tc ? 66 : 74) + Math.min(8, av * 0.08) + C.kick;
+      lx = tx + ffx * 20; ly = up - (tc ? 0.9 : 1.2); lz = tz + ffz * 20;
+      fov = (tc ? 66 : 72) + Math.min(8, av * 0.08) + C.kick;
       snap = true;
     } else if (mode === 'heli') {
       tx = cx - fx * 38; ty = 46; tz = cz - fz * 38;
@@ -1408,6 +1438,7 @@
     var focus = o.focus || S.player || S.cars[0];
     if (focus) {
       this.updateCamera(focus, dt, o);
+      this.syncCockpit(S, focus, o, dt);
       this.world.setFocus(focus.x, focus.y);
       var showMarker = o.marker && S.player && (this.cam.mode === 'tv' || this.cam.mode === 'heli');
       this.marker.visible = !!showMarker;

@@ -6,6 +6,7 @@
   'use strict';
 
   var wrapI = function (i, n) { return ((i % n) + n) % n; };
+  var PI2 = Math.PI * 2;
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function inRun(i, a, b) { return a <= b ? (i >= a && i <= b) : (i >= a || i <= b); }
   function warn(name, e) { try { if (window.console && console.warn) console.warn('Świat 3D: ' + name, e); } catch (e2) { /* nic */ } }
@@ -90,72 +91,155 @@
   }
   var FONT = '"Titillium Web", "Arial Black", Arial, sans-serif';
 
-  // asfalt: kruszywo + mapa szorstkości (kafel 4 m)
+  // Kanwa z tablic: kolor (0..1, sRGB, 3 kanały) albo skala szarości (1 kanał)
+  function canvasOf(S, A, ch) {
+    var c = makeCanvas(S, S), g = c.getContext('2d'), img = g.createImageData(S, S), d = img.data, n = S * S;
+    for (var i = 0; i < n; i++) {
+      var o = i * 4;
+      if (ch === 3) { d[o] = A[i * 3] * 255; d[o + 1] = A[i * 3 + 1] * 255; d[o + 2] = A[i * 3 + 2] * 255; }
+      else d[o] = d[o + 1] = d[o + 2] = A[i] * 255;
+      d[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+  // Mapa normalnych z pola wysokości (kafel bez szwów, wysokość w pikselach); k — siła nachylenia
+  function normalFromHeight(H, S, k) {
+    var c = makeCanvas(S, S), g = c.getContext('2d'), img = g.createImageData(S, S), d = img.data;
+    for (var y = 0; y < S; y++) {
+      var yu = ((y - 1 + S) % S) * S, yd = ((y + 1) % S) * S, yr = y * S;
+      for (var x = 0; x < S; x++) {
+        var xl = (x - 1 + S) % S, xr = (x + 1) % S;
+        var dx = (H[yr + xr] - H[yr + xl]) * k, dy = (H[yd + x] - H[yu + x]) * k;
+        var il = 1 / Math.sqrt(dx * dx + dy * dy + 1), o = (yr + x) * 4;
+        d[o] = (0.5 - 0.5 * dx * il) * 255; d[o + 1] = (0.5 - 0.5 * dy * il) * 255; d[o + 2] = (0.5 + 0.5 * il) * 255; d[o + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+  // Ziarno (elipsa z kopułą) w polu wysokości z kolorem; zawija się na brzegach kafla
+  function grain(S, H, C, RG, x0, y0, a, b, ang, hp, col, rough, shade) {
+    var ca = Math.cos(ang), sa = Math.sin(ang), r = Math.ceil(Math.max(a, b)) + 1;
+    var xi0 = Math.floor(x0), yi0 = Math.floor(y0);
+    for (var yy = yi0 - r; yy <= yi0 + r; yy++) {
+      var py = ((yy % S) + S) % S, dy = yy + 0.5 - y0;
+      for (var xx = xi0 - r; xx <= xi0 + r; xx++) {
+        var dx = xx + 0.5 - x0, u = (dx * ca + dy * sa) / a, w = (-dx * sa + dy * ca) / b, d2 = u * u + w * w;
+        if (d2 >= 1) continue;
+        var h = Math.sqrt(1 - d2), z = hp * h, i = py * S + ((xx % S) + S) % S;
+        if (z <= H[i]) continue;
+        H[i] = z;
+        var k = 1 - shade + shade * Math.sqrt(h); // ciemniejsze brzegi ziarna (szczeliny)
+        C[i * 3] = col[0] * k; C[i * 3 + 1] = col[1] * k; C[i * 3 + 2] = col[2] * k;
+        if (RG) RG[i] = rough;
+      }
+    }
+  }
+
+  // asfalt: spoiwo, gęste kruszywo, wypolerowane wierzchołki kamieni (kafel 4 m): kolor, szorstkość, normalne
   function texAsphalt(S) {
-    var col = makeCanvas(S, S), rgh = makeCanvas(S, S), P = S / 32;
-    var gc = fillPixels(col, function (x, y, o) {
-      var n = (hash2(x, y) - 0.5) * 16 + (vnoise(x / P, y / P, 32, 3) - 0.5) * 14 + (vnoise(x / (P * 4), y / (P * 4), 8, 9) - 0.5) * 12;
-      o[0] = 90 + n; o[1] = 93 + n; o[2] = 98 + n;
-    });
-    var gr = fillPixels(rgh, function (x, y, o) {
-      var n = (hash2(x + 7, y + 3) - 0.5) * 26 + (vnoise(x / P, y / P, 32, 5) - 0.5) * 22;
-      o[0] = o[1] = o[2] = 218 + n;
-    });
-    var R = rng(11), cnt = Math.round(S * S / 36), sc = S / 512;
+    var n = S * S, H = new Float32Array(n), C = new Float32Array(n * 3), RG = new Float32Array(n), P = S / 32, x, y, i;
+    for (y = 0; y < S; y++) for (x = 0; x < S; x++) {
+      i = y * S + x;
+      var f = hash2(x, y) - 0.5, m = vnoise(x / P, y / P, 32, 3) - 0.5, M = vnoise(x / (P * 4), y / (P * 4), 8, 9) - 0.5;
+      var v = 0.29 + f * 0.03 + m * 0.025 + M * 0.03;
+      C[i * 3] = v; C[i * 3 + 1] = v * 1.01; C[i * 3 + 2] = v * 1.045;
+      H[i] = f * 0.2 + m * 0.25 - 0.4; RG[i] = 0.95 + f * 0.05;
+    }
+    // kruszywo 3–12 mm: w większości oblepione ciemnym spoiwem, część wytarta do jasnego kamienia
+    var R = rng(11), mm = S / 4000, cnt = Math.round(n * 0.75 / (Math.PI * Math.pow(Math.max(0.8, 3.2 * mm), 2)));
     for (var k = 0; k < cnt; k++) {
-      var x = R() * S, y = R() * S, r = Math.max(0.5, (0.45 + R() * R() * 1.7) * sc * 1.6), t = R();
-      var v = t < 0.55 ? 125 + R() * 55 : 42 + R() * 26, warm = (R() - 0.5) * 10;
-      gc.fillStyle = 'rgb(' + Math.round(v + warm) + ',' + Math.round(v) + ',' + Math.round(v - warm + 3) + ')';
-      dotWrap(gc, S, x, y, r);
-      gr.fillStyle = t < 0.55 ? 'rgb(150,150,150)' : 'rgb(205,205,205)'; // wypolerowane kamienie są gładsze
-      dotWrap(gr, S, x, y, r);
+      var rr = (1.5 + R() * R() * 4.5) * mm, a = Math.max(0.6, rr), b = Math.max(0.55, rr * (0.6 + R() * 0.4)), t = R(), lum, warm = (R() - 0.5) * 0.025;
+      if (t < 0.72) lum = 0.2 + R() * 0.1; else if (t < 0.97) lum = 0.33 + R() * 0.16; else lum = 0.55 + R() * 0.12;
+      grain(S, H, C, RG, R() * S, R() * S, a, b, R() * PI2, a * 0.9, [lum + warm, lum, lum - warm + 0.012], t < 0.72 ? 0.9 : 0.62, 0.35);
     }
-    return { col: col, rgh: rgh };
+    // drobne ubytki (ciemne pory)
+    for (k = 0; k < n / 90; k++) { i = (R() * n) | 0; H[i] -= 0.8; C[i * 3] *= 0.6; C[i * 3 + 1] *= 0.6; C[i * 3 + 2] *= 0.6; RG[i] = 1; }
+    return { col: canvasOf(S, C, 3), rgh: canvasOf(S, RG, 1), nrm: normalFromHeight(H, S, 0.55) };
   }
-  // trawa parku (kafel 10 m)
+  // Źdźbła trawy w tablicy koloru: krótkie kreski z losowym nachyleniem (kierunek bazowy dir, rozrzut spread)
+  function blades(S, C, count, R, dir, spread, len, pal) {
+    for (var k = 0; k < count; k++) {
+      var x = R() * S, y = R() * S, an = dir + (R() - 0.5) * spread, L = len[0] + R() * (len[1] - len[0]);
+      var dx = Math.cos(an), dy = Math.sin(an), c = pal[(R() * pal.length) | 0], al = 0.35 + R() * 0.45, steps = Math.ceil(L);
+      for (var s = 0; s <= steps; s++) {
+        var t = s / steps, px = ((Math.round(x + dx * L * t) % S) + S) % S, py = ((Math.round(y + dy * L * t) % S) + S) % S, i = (py * S + px) * 3;
+        var a = al * (0.5 + 0.5 * t); // końcówka źdźbła jaśniejsza i bardziej kryjąca
+        C[i] += (c[0] - C[i]) * a; C[i + 1] += (c[1] - C[i + 1]) * a; C[i + 2] += (c[2] - C[i + 2]) * a;
+      }
+    }
+  }
+  // trawa parku (kafel 10 m): plamy suchej i soczystej trawy, kępy, źdźbła w różnych kierunkach
   function texGrass(S) {
-    var c = makeCanvas(S, S);
-    var g = fillPixels(c, function (x, y, o) {
-      var n1 = vnoise(x / (S / 8), y / (S / 8), 8, 21), n2 = vnoise(x / (S / 32), y / (S / 32), 32, 22), h = hash2(x + 99, y);
-      var v = 0.8 + n1 * 0.2 + n2 * 0.12 + (h - 0.5) * 0.18, dry = vnoise(x / (S / 4), y / (S / 4), 4, 23);
-      o[0] = (66 + dry * 26) * v; o[1] = (108 + dry * 8) * v; o[2] = (44 - dry * 8) * v;
-    });
+    var n = S * S, C = new Float32Array(n * 3), x, y;
+    for (y = 0; y < S; y++) for (x = 0; x < S; x++) {
+      var i = (y * S + x) * 3, n1 = vnoise(x / (S / 8), y / (S / 8), 8, 21), n2 = vnoise(x / (S / 32), y / (S / 32), 32, 22);
+      var dry = clamp(vnoise(x / (S / 4), y / (S / 4), 4, 23) * 1.4 - 0.45, 0, 1), v = 0.78 + n1 * 0.22 + n2 * 0.14 + (hash2(x + 99, y) - 0.5) * 0.12;
+      C[i] = (0.22 + dry * 0.12) * v; C[i + 1] = (0.33 + dry * 0.04) * v; C[i + 2] = (0.13 - dry * 0.02) * v;
+    }
     var R = rng(5);
-    for (var k = 0; k < S * 6; k++) {
-      g.fillStyle = R() < 0.5 ? 'rgba(20,50,15,0.35)' : 'rgba(150,190,90,0.25)';
-      g.fillRect(R() * S, R() * S, 1, 1 + R() * 3);
-    }
-    return c;
+    blades(S, C, n / 3, R, 0, PI2, [2, S / 128 + 3], [[0.16, 0.27, 0.09], [0.27, 0.4, 0.15], [0.36, 0.45, 0.2], [0.2, 0.33, 0.1], [0.42, 0.44, 0.24]]);
+    return canvasOf(S, C, 3);
   }
-  // koszony trawnik przy torze: pasy wzdłuż v (kafel 12 m)
+  // koszony trawnik przy torze (kafel 12 m): pasy koszenia wzdłuż v — źdźbła położone w przeciwne strony
   function texLawn(S) {
-    var c = makeCanvas(S, S);
-    var g = fillPixels(c, function (x, y, o) {
-      var st = clamp(Math.sin(y / S * Math.PI * 2) * 3, -1, 1);
-      var n = (hash2(x, y + 5) - 0.5) * 0.16 + (vnoise(x / (S / 16), y / (S / 16), 16, 31) - 0.5) * 0.14;
-      var v = 1 + st * 0.075 + n;
-      o[0] = 74 * v; o[1] = 124 * v; o[2] = 50 * v;
-    });
-    var R = rng(6);
-    for (var k = 0; k < S * 5; k++) {
-      g.fillStyle = R() < 0.5 ? 'rgba(25,60,20,0.3)' : 'rgba(160,200,110,0.22)';
-      g.fillRect(R() * S, R() * S, 1, 2 + R() * 3);
+    var n = S * S, C = new Float32Array(n * 3), x, y;
+    for (y = 0; y < S; y++) for (x = 0; x < S; x++) {
+      var i = (y * S + x) * 3, st = clamp(Math.sin(y / S * Math.PI * 2) * 3, -1, 1);
+      var v = 1 + st * 0.06 + (vnoise(x / (S / 16), y / (S / 16), 16, 31) - 0.5) * 0.16 + (vnoise(x / (S / 4), y / (S / 4), 4, 32) - 0.5) * 0.1;
+      C[i] = 0.25 * v; C[i + 1] = 0.39 * v; C[i + 2] = 0.16 * v;
     }
-    return c;
+    var R = rng(6), pal = [[0.2, 0.33, 0.12], [0.3, 0.46, 0.19], [0.37, 0.5, 0.23], [0.24, 0.38, 0.14]];
+    for (var half = 0; half < 2; half++) {
+      // źdźbła w każdym pasie pochylone zgodnie z kierunkiem koszenia
+      var Cs = new Float32Array(C);
+      blades(S, Cs, n / 4, R, half ? -Math.PI / 2 : Math.PI / 2, 1.1, [2, S / 160 + 3], pal);
+      for (y = 0; y < S; y++) {
+        var inHalf = Math.sin(y / S * Math.PI * 2) >= 0 ? 0 : 1;
+        if (inHalf !== half) continue;
+        for (x = 0; x < S; x++) { var j = (y * S + x) * 3; C[j] = Cs[j]; C[j + 1] = Cs[j + 1]; C[j + 2] = Cs[j + 2]; }
+      }
+    }
+    return canvasOf(S, C, 3);
   }
-  // żwir (kafel 3 m)
+  // żwir (kafel 2,5 m): zaokrąglone otoczaki 8–22 mm w kilku odcieniach, ciemne szczeliny między nimi, normalne
   function texGravel(S) {
-    var c = makeCanvas(S, S);
-    var g = fillPixels(c, function (x, y, o) {
-      var n = (hash2(x, y + 11) - 0.5) * 30 + (vnoise(x / (S / 16), y / (S / 16), 16, 41) - 0.5) * 20;
-      o[0] = 176 + n; o[1] = 158 + n; o[2] = 122 + n;
-    });
-    var R = rng(12), cols = ['#a8946c', '#d8c9a4', '#8f7c58', '#c2b08a', '#e8dcc0', '#9a9184'], sc = S / 256;
-    for (var k = 0; k < S * S / 22; k++) {
-      var x = R() * S, y = R() * S, r = (0.8 + R() * 1.6) * sc;
-      g.fillStyle = 'rgba(60,45,25,0.35)'; dotWrap(g, S, x + 0.6 * sc, y + 0.7 * sc, r);
-      g.fillStyle = cols[(R() * cols.length) | 0]; dotWrap(g, S, x, y, r);
+    var n = S * S, H = new Float32Array(n), C = new Float32Array(n * 3), i;
+    for (i = 0; i < n; i++) {
+      var x = i % S, y = (i / S) | 0, f = hash2(x + 3, y + 11), v = 0.16 + f * 0.05 + (vnoise(x / (S / 16), y / (S / 16), 16, 41) - 0.5) * 0.05;
+      C[i * 3] = v * 1.15; C[i * 3 + 1] = v; C[i * 3 + 2] = v * 0.8; H[i] = -2 + f;
     }
+    var R = rng(12), mm = S / 2500;
+    var PAL = [[0.72, 0.64, 0.5], [0.8, 0.74, 0.6], [0.6, 0.53, 0.42], [0.68, 0.66, 0.62], [0.86, 0.82, 0.74], [0.52, 0.48, 0.43], [0.76, 0.68, 0.53], [0.62, 0.58, 0.54], [0.7, 0.6, 0.46]];
+    var cnt = Math.round(n * 1.5 / (Math.PI * Math.pow(6.5 * mm, 2)));
+    for (var k = 0; k < cnt; k++) {
+      var r = (4 + R() * R() * 7) * mm, c = PAL[(R() * PAL.length) | 0], lv = 0.85 + R() * 0.3;
+      grain(S, H, C, null, R() * S, R() * S, Math.max(0.8, r), Math.max(0.7, r * (0.6 + R() * 0.35)), R() * PI2, r * 0.8, [c[0] * lv, c[1] * lv, c[2] * lv], 0, 0.45);
+    }
+    return { col: canvasOf(S, C, 3), nrm: normalFromHeight(H, S, 0.7) };
+  }
+  // smugi gumy w strefach hamowania: G = krycie (u w poprzek pasa 2 m, v wzdłuż, okres 24 m)
+  function texStreaks() {
+    var W = 64, Hh = 512, C = new Float32Array(W * Hh), R = rng(19), x, y;
+    for (var k = 0; k < 46; k++) {
+      var cx = 4 + R() * (W - 8), w = 0.6 + R() * 2.2, a = 0.25 + R() * 0.75, y0 = R() * Hh, L = Hh * (0.2 + R() * 0.8), drift = (R() - 0.5) * 3;
+      for (var s = 0; s < L; s++) {
+        y = Math.floor(y0 + s) % Hh;
+        var t = s / L, xc = cx + drift * t, aa = a * Math.sin(Math.PI * t) * (0.7 + 0.3 * vnoise(s / 9, k, 1e6, 3));
+        for (x = Math.floor(xc - w - 1); x <= Math.ceil(xc + w + 1); x++) {
+          if (x < 0 || x >= W) continue;
+          var e = 1 - Math.abs(x + 0.5 - xc) / (w + 0.8);
+          if (e > 0) C[y * W + x] = Math.min(1, C[y * W + x] + aa * e);
+        }
+      }
+    }
+    var c = makeCanvas(W, Hh), g = c.getContext('2d'), img = g.createImageData(W, Hh), d = img.data;
+    for (y = 0; y < Hh; y++) for (x = 0; x < W; x++) {
+      var edge = Math.min(1, Math.min(x, W - 1 - x) / 10), o = (y * W + x) * 4, v = Math.round(C[y * W + x] * edge * 255);
+      d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
     return c;
   }
   // krawężnik: u w poprzek (0 = przy asfalcie), v wzdłuż (okres 2,5 m: czerwony + biały)
@@ -386,15 +470,21 @@
     '  reflectedLight.indirectDiffuse *= mix( 1.0, fT.g, uFarStr.y );',
     '}'
   ].join('\n');
-  function farShadowMat(mat, U) {
+  // extra(sh) — dodatkowe zmiany shadera tego materiału, key — jego klucz w pamięci programów
+  function farShadowMat(mat, U, extra, key) {
     mat.onBeforeCompile = function (sh) {
       sh.uniforms.uFarTex = U.tex; sh.uniforms.uFarXf = U.xf; sh.uniforms.uFarFade = U.fade; sh.uniforms.uFarStr = U.str;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + FAR_V_PARS)
         .replace('#include <fog_vertex>', '#include <fog_vertex>\n\tvFarW = ( modelMatrix * vec4( transformed, 1.0 ) ).xz;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>' + FAR_F_PARS)
         .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + FAR_APPLY);
+      if (extra) extra(sh);
     };
-    mat.customProgramCacheKey = function () { return 'pgFarShadow1'; };
+    mat.customProgramCacheKey = function () { return 'pgFarShadow1' + (key || ''); };
+  }
+  // smugi gumy: kolor wierzchołka (G) to krycie, barwa zostaje stała
+  function rubberShader(sh) {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#if defined( USE_COLOR )\n\tdiffuseColor.a *= vColor.g;\n#endif');
   }
   // Drzewa: kolor instancji barwi tylko koronę (atrybut aLeaf), pień zostaje brązowy
   var TREE_COLOR = [
@@ -408,12 +498,144 @@
     '\tvColor.xyz *= mix( vec3( 1.0 ), instanceColor.xyz, aLeaf );',
     '#endif'
   ].join('\n');
-  function treeMat(mat) {
+  // Kołysanie liści na wietrze (faza z położenia instancji, wyżej w koronie mocniej)
+  var TREE_WIND = [
+    '#include <begin_vertex>',
+    '#ifdef USE_INSTANCING',
+    '\tvec3 tIp = vec3( instanceMatrix[ 3 ][ 0 ], instanceMatrix[ 3 ][ 1 ], instanceMatrix[ 3 ][ 2 ] );',
+    '\tfloat tPh = tIp.x * 0.11 + tIp.z * 0.07;',
+    '\tfloat tSw = aLeaf * smoothstep( 0.4, 2.6, position.y );',
+    '\ttransformed.x += tSw * ( sin( uWindT * 1.3 + tPh ) * 0.014 + sin( uWindT * 3.4 + tPh * 2.0 + position.y * 3.0 ) * 0.007 );',
+    '\ttransformed.z += tSw * ( cos( uWindT * 1.1 + tPh * 1.3 ) * 0.011 + sin( uWindT * 2.9 + position.x * 4.0 ) * 0.006 );',
+    '#endif'
+  ].join('\n');
+  // Liście i trawa oświetlone „kulistymi" normalnymi: tylna strona karty nie odwraca normalnej (bez ciemnych plam)
+  var NO_FLIP = '#include <normal_fragment_begin>\n\tnormal = normalize( vNormal );';
+  function treeMat(mat, U) {
     mat.onBeforeCompile = function (sh) {
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLeaf;')
-        .replace('#include <color_vertex>', TREE_COLOR);
+      sh.uniforms.uWindT = U;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLeaf;\nuniform float uWindT;')
+        .replace('#include <color_vertex>', TREE_COLOR)
+        .replace('#include <begin_vertex>', TREE_WIND);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', NO_FLIP);
     };
-    mat.customProgramCacheKey = function () { return 'pgTree1'; };
+    mat.customProgramCacheKey = function () { return 'pgTree2'; };
+  }
+
+  // Tekstura z łańcuchem mipmap, w którym kanał alfa zachowuje pokrycie (liście i trawa nie znikają z odległości).
+  // d0: RGBA (Uint8ClampedArray), tło przezroczyste dostaje kolor bg (bez ciemnych obwódek przy filtrowaniu).
+  function coverageTexture(d0, W, Hh, bg, thr) {
+    var n = W * Hh, i, base = new Uint8Array(n * 4), cov0 = 0;
+    for (i = 0; i < n; i++) {
+      var o = i * 4, a = d0[o + 3];
+      if (a < 8) { base[o] = bg[0]; base[o + 1] = bg[1]; base[o + 2] = bg[2]; base[o + 3] = 0; }
+      else { base[o] = d0[o]; base[o + 1] = d0[o + 1]; base[o + 2] = d0[o + 2]; base[o + 3] = a; } // getImageData: bez mnożenia przez alfę
+      if (a >= thr) cov0++;
+    }
+    cov0 /= n;
+    var levels = [{ data: base, width: W, height: Hh }], src = base, w = W, h = Hh;
+    function covOf(d, cnt, s) { var c = 0; for (var k = 0; k < cnt; k++) if (d[k * 4 + 3] * s >= thr) c++; return c / cnt; }
+    while (w > 1 || h > 1) {
+      var nw = Math.max(1, w >> 1), nh = Math.max(1, h >> 1), dst = new Uint8Array(nw * nh * 4);
+      for (var y = 0; y < nh; y++) for (var x = 0; x < nw; x++) {
+        var sr = 0, sg = 0, sb = 0, sa = 0, cr = 0, cg = 0, cb = 0;
+        for (var dy = 0; dy < 2; dy++) for (var dx = 0; dx < 2; dx++) {
+          var sx = Math.min(w - 1, x * 2 + dx), sy = Math.min(h - 1, y * 2 + dy), so = (sy * w + sx) * 4, al = src[so + 3];
+          sr += src[so] * al; sg += src[so + 1] * al; sb += src[so + 2] * al; sa += al;
+          cr += src[so]; cg += src[so + 1]; cb += src[so + 2];
+        }
+        var o2 = (y * nw + x) * 4;
+        if (sa > 0) { dst[o2] = sr / sa; dst[o2 + 1] = sg / sa; dst[o2 + 2] = sb / sa; } else { dst[o2] = cr / 4; dst[o2 + 1] = cg / 4; dst[o2 + 2] = cb / 4; }
+        dst[o2 + 3] = sa / 4;
+      }
+      // skala alfy dobrana tak, by odsetek tekseli powyżej progu był jak na pełnej rozdzielczości
+      var cnt = nw * nh, lo2 = 1, hi2 = 4;
+      for (var it = 0; it < 10; it++) { var mid = (lo2 + hi2) / 2; if (covOf(dst, cnt, mid) < cov0) lo2 = mid; else hi2 = mid; }
+      for (i = 0; i < cnt; i++) dst[i * 4 + 3] = Math.min(255, dst[i * 4 + 3] * hi2);
+      levels.push({ data: dst, width: nw, height: nh });
+      src = dst; w = nw; h = nh;
+    }
+    var t = new THREE.DataTexture(base, W, Hh, THREE.RGBAFormat, THREE.UnsignedByteType);
+    t.mipmaps = levels; t.generateMipmaps = false;
+    t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter;
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.needsUpdate = true;
+    return t;
+  }
+  // Atlas drzew: ćwiartki [u 0–0,5, v 0–0,5] liście szerokie, [0,5–1, 0–0,5] drobne (topola),
+  // [0–0,5, 0,5–1] igły (pinia), [0,5–1, 0,5–1] kora. Liście jasne i prawie bez barwy — kolor nadaje instancja.
+  function texFoliage(S) {
+    var c = makeCanvas(S, S), g = c.getContext('2d'), Q = S / 2, R = rng(71);
+    g.clearRect(0, 0, S, S);
+    function leafRGB(lum, hue) { return 'rgb(' + Math.round(255 * lum * (0.84 + hue)) + ',' + Math.round(255 * lum) + ',' + Math.round(255 * lum * (0.7 - hue * 0.5)) + ')'; }
+    function cluster(ox, oy, nLeaves, lmin, lmax, wk, stretchY) {
+      var cx = ox + Q / 2, cy = oy + Q / 2, k, twigs = 8 + ((R() * 4) | 0);
+      // gałązki od środka
+      g.lineCap = 'round';
+      for (k = 0; k < twigs; k++) {
+        var a0 = R() * PI2, len = Q * (0.2 + R() * 0.18);
+        g.strokeStyle = 'rgba(92,78,58,1)'; g.lineWidth = Math.max(1.2, Q / 170);
+        g.beginPath(); g.moveTo(cx, cy); g.quadraticCurveTo(cx + Math.cos(a0 + 0.3) * len * 0.5, cy + Math.sin(a0 + 0.3) * len * 0.5 * stretchY, cx + Math.cos(a0) * len, cy + Math.sin(a0) * len * stretchY); g.stroke();
+      }
+      // dwie warstwy: ciemniejsze liście w głębi, jaśniejsze na wierzchu
+      for (var layer = 0; layer < 2; layer++) {
+        for (k = 0; k < nLeaves / 2; k++) {
+          var rr = Q * 0.39 * Math.pow(R(), 0.6), an = R() * PI2;
+          var x = cx + Math.cos(an) * rr, y = cy + Math.sin(an) * rr * stretchY;
+          var L = lmin + R() * (lmax - lmin), W = L * wk, rot = an + (R() - 0.5) * 1.8;
+          var lum = layer ? 0.74 + R() * 0.26 : 0.5 + R() * 0.22, hue = (R() - 0.5) * 0.14;
+          g.save(); g.translate(x, y); g.rotate(rot);
+          g.fillStyle = leafRGB(lum, hue);
+          g.beginPath(); g.moveTo(-L / 2, 0); g.quadraticCurveTo(0, -W, L / 2, 0); g.quadraticCurveTo(0, W, -L / 2, 0); g.fill();
+          g.fillStyle = 'rgba(0,0,0,0.16)';
+          g.beginPath(); g.moveTo(-L / 2, 0); g.quadraticCurveTo(0, W, L / 2, 0); g.quadraticCurveTo(0, W * 0.25, -L / 2, 0); g.fill();
+          g.strokeStyle = 'rgba(255,255,235,0.25)'; g.lineWidth = Math.max(0.6, W * 0.14);
+          g.beginPath(); g.moveTo(-L / 2, 0); g.lineTo(L * 0.42, 0); g.stroke();
+          g.restore();
+        }
+      }
+    }
+    function needles(ox, oy) {
+      var cx = ox + Q / 2, cy = oy + Q / 2, tufts = 34;
+      g.lineCap = 'round';
+      for (var t = 0; t < tufts; t++) {
+        var rr = Q * 0.3 * Math.pow(R(), 0.6), an = R() * PI2, tx = cx + Math.cos(an) * rr, ty = cy + Math.sin(an) * rr * 0.8, len = Q * (0.07 + R() * 0.05);
+        g.strokeStyle = 'rgba(86,72,54,1)'; g.lineWidth = Math.max(1, Q / 220);
+        g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke();
+        for (var k = 0; k < 46; k++) {
+          var a = R() * PI2, l = len * (0.55 + R() * 0.45), lum = 0.5 + R() * 0.5;
+          g.strokeStyle = leafRGB(lum, -0.04 + (R() - 0.5) * 0.06); g.lineWidth = Math.max(1, Q / 260);
+          g.beginPath(); g.moveTo(tx, ty); g.lineTo(tx + Math.cos(a) * l, ty + Math.sin(a) * l); g.stroke();
+        }
+      }
+    }
+    cluster(0, 0, 220, Q * 0.07, Q * 0.12, 0.42, 1);
+    cluster(Q, 0, 300, Q * 0.045, Q * 0.075, 0.5, 1.05);
+    needles(0, Q);
+    // kora: pionowe spękania
+    g.fillStyle = '#7d7064'; g.fillRect(Q, Q, Q, Q);
+    for (var k2 = 0; k2 < 260; k2++) {
+      var bx = Q + R() * Q, bw = 1 + R() * Q / 60, lum2 = R();
+      g.fillStyle = lum2 < 0.55 ? 'rgba(40,32,26,' + (0.25 + R() * 0.4).toFixed(2) + ')' : 'rgba(190,180,165,' + (0.12 + R() * 0.2).toFixed(2) + ')';
+      g.fillRect(bx, Q + R() * Q * 0.5, bw, Q * (0.2 + R() * 0.6));
+    }
+    return coverageTexture(g.getImageData(0, 0, S, S).data, S, S, [205, 215, 170], 128);
+  }
+  // Kępka trawy: źdźbła od podstawy (v = 1) do góry (v = 0), ciemniejsze u nasady
+  function texGrassTuft() {
+    var W = 256, Hh = 128, c = makeCanvas(W, Hh), g = c.getContext('2d'), R = rng(83);
+    g.clearRect(0, 0, W, Hh);
+    g.lineCap = 'round';
+    for (var k = 0; k < 64; k++) {
+      var x0 = 16 + R() * (W - 32), h = Hh * (0.45 + R() * 0.53), bend = (R() - 0.5) * 60, w = 2.2 + R() * 3, lum = R();
+      var gr = g.createLinearGradient(0, Hh, 0, Hh - h);
+      gr.addColorStop(0, 'rgb(38,58,22)');
+      gr.addColorStop(0.55, lum < 0.5 ? 'rgb(84,118,48)' : 'rgb(96,126,54)');
+      gr.addColorStop(1, lum < 0.8 ? 'rgb(128,152,72)' : 'rgb(156,160,92)');
+      g.fillStyle = gr;
+      g.beginPath(); g.moveTo(x0 - w, Hh); g.quadraticCurveTo(x0 + bend * 0.3, Hh - h * 0.6, x0 + bend, Hh - h); g.quadraticCurveTo(x0 + bend * 0.3 + w * 0.3, Hh - h * 0.6, x0 + w, Hh); g.closePath(); g.fill();
+    }
+    return coverageTexture(g.getImageData(0, 0, W, Hh).data, W, Hh, [70, 100, 40], 128);
   }
 
   // Niebo: gradient, słońce z poświatą, warstwa chmur; pas horyzontu w kolorze mgły
@@ -495,7 +717,7 @@
       cloud: [0.98, 0.5, 1.0], disk: 0, haze: 0.16, fogN: 30, fogF: 850, exp: 1.28, wet: true, envI: 0.55, shStr: 0.4
     }
   };
-  var ENV_MATS = ['grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeFar'];
+  var ENV_MATS = ['grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeFar', 'grassTuft', 'rubber'];
 
   // ---------- wsadowe budowanie geometrii (jedna siatka na materiał i komórkę świata) ----------
   var _m3 = new THREE.Matrix3(), _bv = new THREE.Vector3();
@@ -551,64 +773,121 @@
   };
 
   // ---------- drzewa: geometrie wariantów (jednostka = promień korony z 2D) ----------
+  // kind: 0 liściaste okrągłe, 1 topola, 2 pinia; card — bok karty liści
   var TREE_SHAPES = [
-    { sx: 1.0, sy: 0.85, sz: 1.0, cy: 2.0, th: 1.95, tr: 0.055 },  // liściaste, okrągłe
-    { sx: 0.55, sy: 1.6, sz: 0.55, cy: 2.25, th: 1.2, tr: 0.045 },  // topola
-    { sx: 1.15, sy: 0.45, sz: 1.15, cy: 2.9, th: 2.85, tr: 0.05 }   // pinia
+    { kind: 0, sx: 1.0, sy: 0.85, sz: 1.0, cy: 2.0, th: 1.95, tr: 0.055, card: 0.62 },
+    { kind: 1, sx: 0.55, sy: 1.6, sz: 0.55, cy: 2.25, th: 1.2, tr: 0.045, card: 0.42 },
+    { kind: 2, sx: 1.15, sy: 0.45, sz: 1.15, cy: 2.9, th: 2.85, tr: 0.05, card: 0.72 }
   ];
   var SHAPE_OF = [0, 0, 1, 0, 1, 2];
   var GREENS = [0x3b7a35, 0x2f6a2c, 0x4b7f32, 0x356b3d, 0x6f7f2e, 0x2c5e30];
-  function treeGeo(S, det, seed) {
-    var cg = new THREE.IcosahedronGeometry(1, det), cp = cg.attributes.position, nc = cp.count;
-    var tg = new THREE.CylinderGeometry(S.tr * 0.75, S.tr, S.th, 6, 1, true);
-    tg.translate(0, S.th / 2, 0);
-    var tp = tg.attributes.position, tn = tg.attributes.normal, ti = tg.index, nt = ti ? ti.count : tp.count;
-    var total = nc + nt, pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), col = new Float32Array(total * 3), leaf = new Float32Array(total);
-    for (var i = 0; i < nc; i++) {
-      var x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i);
-      var j = 1 + (hash2(Math.round(x * 997) + seed * 7919, Math.round(y * 991) * 31 + Math.round(z * 983)) - 0.5) * 0.34;
-      pos[i * 3] = x * j * S.sx; pos[i * 3 + 1] = S.cy + y * j * S.sy; pos[i * 3 + 2] = z * j * S.sz;
-      var nx = x / S.sx, ny = y / S.sy, nz = z / S.sz, l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-      nor[i * 3] = nx / l; nor[i * 3 + 1] = ny / l; nor[i * 3 + 2] = nz / l;
-      var ao = 0.5 + 0.5 * (y * 0.5 + 0.5);
-      col[i * 3] = ao; col[i * 3 + 1] = ao; col[i * 3 + 2] = ao;
-      leaf[i] = 1;
-    }
-    for (var k = 0; k < nt; k++) {
-      var vi = ti ? ti.getX(k) : k, o = nc + k;
-      pos[o * 3] = tp.getX(vi); pos[o * 3 + 1] = tp.getY(vi); pos[o * 3 + 2] = tp.getZ(vi);
-      nor[o * 3] = tn.getX(vi); nor[o * 3 + 1] = tn.getY(vi); nor[o * 3 + 2] = tn.getZ(vi);
-      col[o * 3] = 0.11; col[o * 3 + 1] = 0.075; col[o * 3 + 2] = 0.05;
-      leaf[o] = 0;
-    }
-    cg.dispose(); tg.dispose();
-    var g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.setAttribute('aLeaf', new THREE.BufferAttribute(leaf, 1));
-    g.computeBoundingSphere();
-    return g;
+  function cross3(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function norm3(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+  // losowy kierunek; up > 0 przesuwa rozkład w górę
+  function randDir(R, up) {
+    var z = R() * 2 - 1, a = R() * PI2, s = Math.sqrt(1 - z * z);
+    return norm3([s * Math.cos(a), z + (up || 0), s * Math.sin(a)]);
   }
-  // daleki LOD: sama korona (dwudziestościan), kształt nadaje macierz instancji
-  function treeFarGeo() {
-    var cg = new THREE.IcosahedronGeometry(1, 0), cp = cg.attributes.position, n = cp.count;
-    var pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3), leaf = new Float32Array(n);
-    for (var i = 0; i < n; i++) {
-      var x = cp.getX(i), y = cp.getY(i), z = cp.getZ(i), l = Math.sqrt(x * x + y * y + z * z) || 1, ao = 0.55 + 0.45 * (y / l * 0.5 + 0.5);
-      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
-      nor[i * 3] = x / l; nor[i * 3 + 1] = y / l; nor[i * 3 + 2] = z / l;
-      col[i * 3] = ao; col[i * 3 + 1] = ao; col[i * 3 + 2] = ao;
-      leaf[i] = 1;
+
+  // Bufor geometrii drzewa: pozycja, normalna, uv (atlas), kolor (AO albo barwa kory), aLeaf (1 = liście barwione instancją)
+  function TreeBuf() { this.p = []; this.n = []; this.t = []; this.c = []; this.l = []; this.ix = []; this.vc = 0; }
+  TreeBuf.prototype.v = function (x, y, z, nx, ny, nz, u, w, r, g, b, leaf) {
+    this.p.push(x, y, z); this.n.push(nx, ny, nz); this.t.push(u, w); this.c.push(r, g, b); this.l.push(leaf);
+    return this.vc++;
+  };
+  // pień albo konar: ścięty stożek od a do b (promienie r0, r1), kora z prawej dolnej ćwiartki atlasu
+  TreeBuf.prototype.limb = function (a, b, r0, r1, seg, col) {
+    var d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+    d = [d[0] / L, d[1] / L, d[2] / L];
+    var e1 = norm3(cross3(d, Math.abs(d[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0])), e2 = cross3(e1, d), base = this.vc, s;
+    for (var k = 0; k <= 1; k++) {
+      var c = k ? b : a, r = k ? r1 : r0;
+      for (s = 0; s <= seg; s++) {
+        var an = s / seg * PI2, ca = Math.cos(an), sa = Math.sin(an);
+        var nx = e1[0] * ca + e2[0] * sa, ny = e1[1] * ca + e2[1] * sa, nz = e1[2] * ca + e2[2] * sa;
+        this.v(c[0] + nx * r, c[1] + ny * r, c[2] + nz * r, nx, ny, nz, 0.52 + 0.46 * s / seg, 0.52 + (k ? 0.46 * Math.min(1, L / 2.5) : 0), col[0], col[1], col[2], 0);
+      }
     }
-    cg.dispose();
+    for (s = 0; s < seg; s++) { var p0 = base + s, p1 = base + seg + 1 + s; this.ix.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1); }
+  };
+  // karta liści: środek c, normalna karty nc, bok sz, obrót rot, ćwiartka atlasu (u0, v0);
+  // normalne wierzchołków „kuliste" od środka korony ctr (półosie rad) — korona cieniuje się jak bryła, nie jak płaskie karty
+  TreeBuf.prototype.card = function (c, nc, sz, rot, u0, v0, ctr, rad) {
+    var t1 = norm3(cross3(Math.abs(nc[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], nc)), t2 = cross3(nc, t1), cr = Math.cos(rot), sr = Math.sin(rot);
+    var a1 = [t1[0] * cr + t2[0] * sr, t1[1] * cr + t2[1] * sr, t1[2] * cr + t2[2] * sr];
+    var a2 = [-t1[0] * sr + t2[0] * cr, -t1[1] * sr + t2[1] * cr, -t1[2] * sr + t2[2] * cr];
+    var h = sz / 2, base = this.vc, CO = [[-1, -1, 0, 1], [1, -1, 1, 1], [1, 1, 1, 0], [-1, 1, 0, 0]];
+    for (var k = 0; k < 4; k++) {
+      var q = CO[k], px = c[0] + (a1[0] * q[0] + a2[0] * q[1]) * h, py = c[1] + (a1[1] * q[0] + a2[1] * q[1]) * h, pz = c[2] + (a1[2] * q[0] + a2[2] * q[1]) * h;
+      var rx = (px - ctr[0]) / rad[0], ry = (py - ctr[1]) / rad[1], rz = (pz - ctr[2]) / rad[2], rl = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
+      var nx = rx / rl * 0.8 + nc[0] * 0.2, ny = ry / rl * 0.8 + nc[1] * 0.2 + 0.25, nz = rz / rl * 0.8 + nc[2] * 0.2, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      var ao = (0.42 + 0.58 * Math.pow(Math.min(1, rl), 0.9)) * (0.86 + 0.14 * clamp(ry * 0.5 + 0.5, 0, 1));
+      this.v(px, py, pz, nx / nl, ny / nl, nz / nl, u0 + 0.02 + q[2] * 0.46, v0 + 0.02 + q[3] * 0.46, ao, ao, ao, 1);
+    }
+    this.ix.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  TreeBuf.prototype.build = function () {
     var g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.setAttribute('aLeaf', new THREE.BufferAttribute(leaf, 1));
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.t, 2));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
+    g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(this.l, 1));
+    g.setIndex(this.ix);
     g.computeBoundingSphere();
+    this.p = this.n = this.t = this.c = this.l = this.ix = null;
     return g;
+  };
+  // Drzewo z pniem, konarami i kępami kart liści; det 0 — mniej kart (słabszy sprzęt), 1 — pełne
+  function treeGeo(S, det, seed) {
+    var B = new TreeBuf(), R = rng(1000 + seed * 7919), k, j;
+    var ctr = [0, S.cy, 0], rad = [S.sx, S.sy, S.sz], bark = S.kind === 2 ? [0.5, 0.4, 0.34] : [0.42, 0.4, 0.38], seg = det ? 7 : 5;
+    var lean = [(R() - 0.5) * (S.kind === 2 ? 0.3 : 0.1), 0, (R() - 0.5) * (S.kind === 2 ? 0.3 : 0.1)];
+    var mid = [lean[0] * 0.4, S.th * 0.5, lean[2] * 0.4], top = [lean[0], S.th, lean[2]];
+    B.limb([0, -0.08, 0], mid, S.tr * 1.1, S.tr * 0.85, seg, bark);
+    B.limb(mid, top, S.tr * 0.85, S.tr * 0.5, seg, bark);
+    var nClump = S.kind === 1 ? (det ? 12 : 7) : (det ? 10 : 6), per = det ? (S.kind === 1 ? 7 : 9) : 5;
+    var u0 = S.kind === 1 ? 0.5 : 0, v0 = S.kind === 2 ? 0.5 : 0, cs = S.card, cc;
+    for (k = 0; k < nClump; k++) {
+      // środki kęp: okrągłe — na ~60 % promienia (więcej u góry), topola — wzdłuż osi, pinia — w płaskim dysku
+      if (S.kind === 1) {
+        var t = (k + 0.5) / nClump, an = R() * PI2, rr = 0.1 + 0.32 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+        cc = [Math.cos(an) * rr * S.sx, S.cy + (t * 2 - 1) * S.sy * 0.82, Math.sin(an) * rr * S.sz];
+      } else if (S.kind === 2) {
+        var an2 = k / nClump * PI2 + R() * 0.6, rr2 = k === 0 ? 0 : 0.38 + R() * 0.4;
+        cc = [Math.cos(an2) * rr2 * S.sx, S.cy + (R() - 0.25) * S.sy * 0.5, Math.sin(an2) * rr2 * S.sz];
+      } else {
+        var dd = randDir(R, 0.35), r3 = 0.45 + R() * 0.2;
+        cc = [dd[0] * r3 * S.sx, S.cy + dd[1] * r3 * S.sy, dd[2] * r3 * S.sz];
+      }
+      // konar do kępy (widoczny w prześwitach korony)
+      if (det && S.kind !== 1) {
+        var from = S.th * (S.kind === 2 ? 0.86 + R() * 0.1 : 0.55 + R() * 0.3), f = from / S.th;
+        B.limb([lean[0] * f, from, lean[2] * f], [cc[0] * 0.85, cc[1] - 0.12 * S.sy, cc[2] * 0.85], S.tr * 0.5, S.tr * 0.16, 4, bark);
+      }
+      for (j = 0; j < per; j++) {
+        var off = randDir(R, 0), od = 0.1 + R() * 0.24;
+        var p = [cc[0] + off[0] * od * S.sx, cc[1] + off[1] * od * S.sy * (S.kind === 2 ? 0.45 : 1), cc[2] + off[2] * od * S.sz];
+        var out = norm3([(p[0] - ctr[0]) / rad[0], (p[1] - ctr[1]) / rad[1], (p[2] - ctr[2]) / rad[2]]), rd = randDir(R, 0);
+        var nc = S.kind === 2 ? norm3([rd[0] * 0.55, 1, rd[2] * 0.55]) : norm3([out[0] + rd[0] * 0.9, out[1] + rd[1] * 0.9, out[2] + rd[2] * 0.9]);
+        B.card(p, nc, cs * (0.8 + R() * 0.4), R() * PI2, u0, v0, ctr, rad);
+      }
+    }
+    // wypełnienie środka korony: bez prześwitów na wylot
+    for (k = 0; k < (det ? 6 : 3); k++) {
+      var di = randDir(R, 0);
+      B.card([di[0] * 0.22 * S.sx, S.cy + di[1] * 0.22 * S.sy, di[2] * 0.22 * S.sz], di, cs * 1.15, R() * PI2, u0, v0, ctr, rad);
+    }
+    return B.build();
+  }
+  // daleki LOD: kilkanaście kart w kuli jednostkowej, kształt korony nadaje macierz instancji
+  function treeFarGeo() {
+    var B = new TreeBuf(), R = rng(4242), ctr = [0, 0, 0], rad = [1, 1, 1];
+    for (var k = 0; k < 16; k++) {
+      var d = randDir(R, 0.15);
+      B.card([d[0] * 0.48, d[1] * 0.48, d[2] * 0.48], norm3([d[0] + R() - 0.5, d[1] + R() - 0.5, d[2] + R() - 0.5]), 1.05, R() * PI2, 0, 0, ctr, rad);
+    }
+    return B.build();
   }
 
   // =====================================================================
@@ -715,14 +994,20 @@
     // ---------- tekstury ----------
     var TX = {};
     function mk(name, fn) { try { TX[name] = keep(fn()); } catch (e) { warn('tekstura ' + name, e); TX[name] = null; } }
-    var TS = lo ? 256 : 512;
-    var asp = null;
-    try { asp = texAsphalt(TS); } catch (e) { warn('asfalt', e); }
+    var TS = lo ? 256 : 512, TSB = hi ? 1024 : TS;
+    var asp = null, grv = null;
+    try { asp = texAsphalt(TSB); } catch (e) { warn('asfalt', e); }
     TX.asph = asp ? keep(texOf(asp.col, true, true, aniso)) : null;
     TX.asphR = asp ? keep(texOf(asp.rgh, false, true, aniso)) : null;
+    TX.asphN = asp && !lo ? keep(texOf(asp.nrm, false, true, aniso)) : null;
     mk('grass', function () { return texOf(texGrass(TS), true, true, aniso); });
     mk('lawn', function () { return texOf(texLawn(TS), true, true, aniso); });
-    mk('gravel', function () { return texOf(texGravel(lo ? 128 : 256), true, true, aniso); });
+    try { grv = texGravel(TSB); } catch (e) { warn('żwir', e); }
+    TX.gravel = grv ? keep(texOf(grv.col, true, true, aniso)) : null;
+    TX.gravelN = grv && !lo ? keep(texOf(grv.nrm, false, true, aniso)) : null;
+    mk('streak', function () { return texOf(texStreaks(), false, true, aniso); });
+    mk('foliage', function () { var t = texFoliage(hi ? 1024 : 512); t.anisotropy = Math.min(aniso, 4); return t; });
+    mk('tuft', function () { var t = texGrassTuft(); t.anisotropy = Math.min(aniso, 4); return t; });
     mk('kerb', function () { return texOf(texKerb(), true, true, aniso); });
     mk('concrete', function () { return texOf(texConcrete(256), true, true, Math.min(aniso, 4)); });
     mk('roof', function () { return texOf(texRoof(), true, true, Math.min(aniso, 4)); });
@@ -743,9 +1028,11 @@
     var M = this.mats = {
       grass: std({ map: TX.grass || null, vertexColors: true, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 4 }),
       lawn: std({ map: TX.lawn || null, vertexColors: true, roughness: 1, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2 }),
-      asphalt: std({ map: TX.asph, roughnessMap: TX.asphR, vertexColors: true, roughness: 1, metalness: 0 }),
-      runoff: std({ map: TX.asph, roughnessMap: TX.asphR, vertexColors: true, roughness: 1, metalness: 0 }),
-      gravel: std({ map: TX.gravel || null, vertexColors: true, roughness: 1, metalness: 0 }),
+      asphalt: std({ map: TX.asph, roughnessMap: TX.asphR, normalMap: TX.asphN, normalScale: new THREE.Vector2(0.7, 0.7), vertexColors: true, roughness: 1, metalness: 0 }),
+      runoff: std({ map: TX.asph, roughnessMap: TX.asphR, normalMap: TX.asphN, normalScale: new THREE.Vector2(0.7, 0.7), vertexColors: true, roughness: 1, metalness: 0 }),
+      gravel: std({ map: TX.gravel || null, normalMap: TX.gravelN, normalScale: new THREE.Vector2(1, 1), vertexColors: true, roughness: 0.96, metalness: 0 }),
+      // smugi gumy: kolor stały, krycie = tekstura × kolor wierzchołka (G)
+      rubber: std({ color: 0x0a0a0b, alphaMap: TX.streak || null, vertexColors: true, transparent: true, depthWrite: false, roughness: 0.7, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
       kerb: std({ map: TX.kerb || null, roughness: 0.55, metalness: 0 }),
       paint: std({ vertexColors: true, roughness: 0.6, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       chk: std({ map: TX.chk || null, roughness: 0.6, metalness: 0, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
@@ -763,11 +1050,14 @@
       crowdB: std({ map: TX.crowdB || null, roughness: 0.95, metalness: 0 }),
       sign: std({ map: TX.sign || null, roughness: 0.45, metalness: 0 }),
       facade: std({ map: TX.facade || null, vertexColors: true, roughness: 0.6, metalness: 0.05 }),
-      tree: std({ vertexColors: true, roughness: 0.92, metalness: 0 }),
-      treeFar: std({ vertexColors: true, roughness: 0.95, metalness: 0 })
+      tree: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85, metalness: 0 }),
+      treeFar: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.9, metalness: 0 }),
+      grassTuft: std({ map: TX.tuft || null, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, metalness: 0 })
     };
     ['grass', 'lawn', 'asphalt', 'runoff', 'gravel', 'kerb', 'paint', 'chk', 'paddock'].forEach(function (k) { farShadowMat(M[k], farU); });
-    treeMat(M.tree); treeMat(M.treeFar);
+    farShadowMat(M.rubber, farU, rubberShader, 'r');
+    this.windU = { value: 0 };
+    treeMat(M.tree, this.windU); treeMat(M.treeFar, this.windU);
 
     // ---------- niebo, światło, mgła ----------
     scene.fog = new THREE.Fog(0xcfdde8, 220, 2700);
@@ -930,6 +1220,25 @@
         o.lat = lat; o.u = lat / 4; o.v = si * ds / 4; o.r = c; o.g = c; o.b = c;
       });
     });
+    // smugi gumy w strefach hamowania (wg profilu prędkości wzorcowego bolidu), dwa ślady opon wzdłuż linii jazdy
+    safe('guma', function () {
+      if (!M.rubber || !TX.streak || !PG.speedProfile || !PG.carParams || !PG.DEFAULT_TEAMS) return;
+      var tm = PG.DEFAULT_TEAMS[0], pp = PG.carParams(tm, tm.drivers[0]);
+      var prof = PG.speedProfile(T, { power: pp.power, cd: pp.cd, gripMul: pp.gripMul, aeroMul: pp.aeroMul, brakeMul: 1 });
+      if (!prof || prof.length !== N) return;
+      var ext = Math.round(14 / ds), lim = hw - 0.25;
+      runs(N, function (i) { return prof[(i + 1) % N] < prof[i] - 0.02; }).forEach(function (r, ri) {
+        if (r[1] * ds < 25 || r[1] >= N / 2) return;
+        var I = clamp((prof[r[0]] - prof[wrapI(r[0] + r[1], N)]) / 35, 0.35, 1) * 0.85, L = r[1] + ext;
+        [-0.8, 0.8].forEach(function (off, tk) {
+          strip('rubber', r[0], L, 2, function (i, si, j, o) {
+            var t = (si - r[0]) / L, a = I * Math.min(1, t * 2.4) * (t > 0.86 ? (1 - t) / 0.14 : 1) * (0.78 + 0.22 * Math.sin(si * ds * 0.07 + tk + ri));
+            o.lat = clamp(LO[i] + off + (j ? 0.62 : -0.62), -lim, lim); o.y = 0.004; o.u = j; o.v = (si * ds + tk * 9 + ri * 5) / 24;
+            o.r = o.g = o.b = a;
+          });
+        });
+      });
+    });
     safe('trawnik', function () {
       [-1, 1].forEach(function (s) {
         var bar = s < 0 ? T.barL : T.barR;
@@ -944,11 +1253,20 @@
     safe('pobocza', function () {
       [[-1, T.surfL, T.barL], [1, T.surfR, T.barR]].forEach(function (sd) {
         var s = sd[0], surf = sd[1], bar = sd[2];
+        // żwir: lekko pofałdowany (koleiny, nawiane pagórki), ciemniejszy przy torze, gdzie zalega pył z opon
+        var GL = lo ? 2 : 6;
+        function gh(x, z) { return (vnoise(x / 2.4, z / 2.4, 65536, 44) - 0.5) * 0.1 + (vnoise(x / 0.9, z / 0.9, 65536, 45) - 0.5) * 0.035; }
         runs(N, function (i) { return surf[i] === 1; }).forEach(function (r) {
-          strip('gravel', wrapI(r[0] - 1, N), r[1] + 1, 2, function (i, si, j, o) {
-            var lat = j ? Math.max(hw + 2, Math.min(bar[i] - 0.4, maxIn(i, s))) : hw + 1.3;
-            var c = 0.92 + hash2(i, j + 3) * 0.1;
-            o.lat = s * lat; o.y = -0.02; o.u = s * lat / 3; o.v = si * ds / 3; o.r = c; o.g = c; o.b = c;
+          strip('gravel', wrapI(r[0] - 1, N), r[1] + 1, GL, function (i, si, j, o) {
+            var far = Math.max(hw + 2, Math.min(bar[i] - 0.4, maxIn(i, s))), near = hw + 1.3, lat = near + (far - near) * j / (GL - 1);
+            var x = T.x[i] + T.nx[i] * s * lat, z = T.y[i] + T.ny[i] * s * lat;
+            // plamy przemieszanego żwiru i ślady grabienia w poprzek
+            var c = (0.8 + vnoise(x / 7, z / 7, 65536, 46) * 0.3 + (vnoise(x / 1.6, z / 1.6, 65536, 47) - 0.5) * 0.12) * (j === 0 ? 0.8 : 1);
+            o.lat = s * lat; o.y = -0.02; o.u = s * lat / 2.5; o.v = si * ds / 2.5; o.r = c; o.g = c * 0.985; o.b = c * 0.965;
+            if (j > 0 && j < GL - 1) {
+              var h0 = gh(x, z), e = 0.35, gx = (gh(x + e, z) - h0) / e, gz = (gh(x, z + e) - h0) / e, il = 1 / Math.sqrt(gx * gx + gz * gz + 1);
+              o.y += h0 + 0.03; o.nx = -gx * il; o.ny = il; o.nz = -gz * il;
+            }
           });
         });
         runs(N, function (i) { return surf[i] === 2; }).forEach(function (r) {
@@ -1441,8 +1759,10 @@
       var list = [];
       if (R2D.treeGrid && R2D.treeGrid.forEach) R2D.treeGrid.forEach(function (arr) { for (var t = 0; t < arr.length; t++) list.push(arr[t]); });
       if (!list.length) return;
-      var step = hi ? 1 : q === 'medium' ? 2 : 3, det = lo ? 0 : 1;
-      var nearGeo = TREE_SHAPES.map(function (S, k) { return keep(treeGeo(S, det, k)); });
+      self.treeCount = list.length;
+      var step = hi ? 1 : q === 'medium' ? 2 : 3, det = lo ? 0 : 1, NV = 2; // NV wariantów każdego kształtu
+      var nearGeo = [];
+      TREE_SHAPES.forEach(function (S, k) { for (var vv = 0; vv < NV; vv++) nearGeo.push(keep(treeGeo(S, det, k * 10 + vv))); });
       var farGeo = keep(treeFarGeo());
       var CH = lo ? 640 : q === 'medium' ? 400 : 320, chunks = {}, keys = [], t;
       for (t = 0; t < list.length; t += step) {
@@ -1452,23 +1772,26 @@
       }
       var mtx = new THREE.Matrix4(), qt = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), cc = new THREE.Color();
       fg.setTransform(1, 0, 0, 1, 0, 0); fg.globalCompositeOperation = 'multiply';
+      function variant(tr) { var sh = SHAPE_OF[(tr.v % 6) | 0] || 0; return sh * NV + (hash2(Math.round(tr.x * 7), Math.round(tr.y * 7)) < 0.5 ? 0 : 1); }
       keys.forEach(function (key2) {
-        var Lst = chunks[key2], cnt = [0, 0, 0], a;
-        for (a = 0; a < Lst.length; a++) cnt[SHAPE_OF[(Lst[a].v % 6) | 0] || 0]++;
-        var near = [], idx = [0, 0, 0], minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
-        for (var s = 0; s < 3; s++) if (cnt[s]) near[s] = new THREE.InstancedMesh(nearGeo[s], M.tree, cnt[s]);
+        var Lst = chunks[key2], cnt = [], a, s;
+        for (s = 0; s < nearGeo.length; s++) cnt.push(0);
+        for (a = 0; a < Lst.length; a++) cnt[variant(Lst[a])]++;
+        var near = [], idx = cnt.map(function () { return 0; }), minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
+        for (s = 0; s < nearGeo.length; s++) if (cnt[s]) near[s] = new THREE.InstancedMesh(nearGeo[s], M.tree, cnt[s]);
         var far = new THREE.InstancedMesh(farGeo, M.treeFar, Lst.length);
         for (a = 0; a < Lst.length; a++) {
-          var tr = Lst[a], sh = SHAPE_OF[(tr.v % 6) | 0] || 0, S = TREE_SHAPES[sh];
+          var tr = Lst[a], vi = variant(tr), sh = (vi / NV) | 0, S = TREE_SHAPES[sh];
           var hsh = hash2(Math.round(tr.x * 10), Math.round(tr.y * 10)), r = (tr.r || 4) * (0.92 + hsh * 0.16), ry = 1 + (hash2(a, 17) - 0.5) * 0.2;
           qt.setFromAxisAngle(UP, hsh * 6.283);
           cc.setHex(GREENS[(tr.v % 6) | 0] || GREENS[0]);
-          var kc = 0.78 + hash2(a + 5, 23) * 0.4;
+          // atlas liści jest jasny, ale nie biały: lekkie rozjaśnienie, by barwa korony została jak wcześniej
+          var kc = (0.78 + hash2(a + 5, 23) * 0.4) * 1.22;
           if (sh === 1) { cc.r *= 1.12; cc.g *= 1.06; }
           if (sh === 2) { cc.r *= 0.8; cc.b *= 1.15; kc *= 0.85; }
           cc.multiplyScalar(kc);
           mtx.compose(pv.set(tr.x, 0, tr.y), qt, sv.set(r, r * ry, r));
-          near[sh].setMatrixAt(idx[sh], mtx); near[sh].setColorAt(idx[sh], cc); idx[sh]++;
+          near[vi].setMatrixAt(idx[vi], mtx); near[vi].setColorAt(idx[vi], cc); idx[vi]++;
           mtx.compose(pv.set(tr.x, S.cy * r * ry, tr.y), qt, sv.set(S.sx * r, S.sy * r * ry, S.sz * r));
           far.setMatrixAt(a, mtx); far.setColorAt(a, cc);
           if (tr.x < minx) minx = tr.x; if (tr.x > maxx) maxx = tr.x; if (tr.y < minz) minz = tr.y; if (tr.y > maxz) maxz = tr.y;
@@ -1478,12 +1801,109 @@
         near.forEach(function (im) {
           if (!im) return;
           im.visible = false; im.castShadow = shadowsOn; im.receiveShadow = shadowsOn && hi;
-          im.matrixAutoUpdate = false; im.updateMatrix(); scene.add(im); keep(im); rec.near.push(im);
+          im.matrixAutoUpdate = false; im.updateMatrix();
+          if (im.computeBoundingSphere) im.computeBoundingSphere();
+          scene.add(im); keep(im); rec.near.push(im);
         });
         far.castShadow = false; far.receiveShadow = false; far.matrixAutoUpdate = false; far.updateMatrix();
+        if (far.computeBoundingSphere) far.computeBoundingSphere();
         scene.add(far); keep(far);
         self.treeChunks.push(rec);
       });
+    });
+    // ---------- trawa 3D: kępki w siatce wokół kamery (położenie i maska liczone w shaderze) ----------
+    // Maska w rzucie z góry: R — odległość od twardej nawierzchni (0..20 m, pole odległości dobrze się interpoluje),
+    // G — gdzie rośnie trawa (pas między poboczem a barierą i trawnik za barierą bez trybun).
+    safe('trawa 3D', function () {
+      if (lo || !TX.tuft) return;
+      var MS = 2048, mk2 = MS / FL, DF = 20;
+      var cA = makeCanvas(MS, MS), gA = cA.getContext('2d'), cB = makeCanvas(MS, MS), gB = cB.getContext('2d');
+      gA.fillStyle = '#000'; gA.fillRect(0, 0, MS, MS);
+      gB.fillStyle = '#fff'; gB.fillRect(0, 0, MS, MS); gB.globalCompositeOperation = 'darken';
+      function P(i, lat) { return [(T.x[i] + T.nx[i] * lat - fx0) * mk2, (T.y[i] + T.ny[i] * lat - fz0) * mk2]; }
+      function quad(g2, i, i1, s, a0, a1, b0, b1) {
+        var p0 = P(i, s * a0), p1 = P(i1, s * b0), p2 = P(i1, s * b1), p3 = P(i, s * a1);
+        g2.beginPath(); g2.moveTo(p0[0], p0[1]); g2.lineTo(p1[0], p1[1]); g2.lineTo(p2[0], p2[1]); g2.lineTo(p3[0], p3[1]); g2.closePath(); g2.fill();
+      }
+      [[-1, T.surfL, T.barL, T.kerbL, markL], [1, T.surfR, T.barR, T.kerbR, markR]].forEach(function (sd) {
+        var s = sd[0], surf = sd[1], bar = sd[2], kb = sd[3], mkS = sd[4];
+        function hard(i) { // zewnętrzna krawędź twardej nawierzchni (asfalt, krawężnik, żwir, pobocze asfaltowe)
+          if (surf[i] === 1 || surf[i] === 2) return Math.max(hw + 2, Math.min(bar[i] - 0.4, maxIn(i, s)));
+          return kb[i] ? hw + 1.5 : hw;
+        }
+        for (var i = 0; i < N; i++) {
+          var i1 = (i + 1) % N, h0 = hard(i), h1 = hard(i1);
+          // pole odległości: gradient od krawędzi (0) do DF metrów dalej (1)
+          var q0 = P(i, s * h0), q1 = P(i, s * (h0 + DF)), gr = gB.createLinearGradient(q0[0], q0[1], q1[0], q1[1]);
+          gr.addColorStop(0, '#000'); gr.addColorStop(1, '#fff'); gB.fillStyle = gr;
+          quad(gB, i, i1, s, h0 - 8, h0 + DF, h1 - 8, h1 + DF); // cała nawierzchnia w środku ma 0
+          // przed barierą
+          var e0 = Math.min(bar[i] - 0.3, maxIn(i, s)), e1 = Math.min(bar[i1] - 0.3, maxIn(i1, s));
+          gA.fillStyle = '#fff';
+          if (e0 > h0 + 0.6 && e1 > h1 + 0.6) quad(gA, i, i1, s, h0 + 0.2, e0, h1 + 0.2, e1);
+          // za barierą (bez trybun i siatek)
+          if (!mkS[i] && !inMain(i)) { var b0 = bar[i] + barT(s, i) + 0.4, b1 = bar[i1] + barT(s, i1) + 0.4; quad(gA, i, i1, s, b0, bar[i] + 8.5, b1, bar[i1] + 8.5); }
+        }
+      });
+      var dA = gA.getImageData(0, 0, MS, MS).data, dB = gB.getImageData(0, 0, MS, MS).data, md = new Uint8Array(MS * MS * 4);
+      for (var k = 0; k < MS * MS; k++) { md[k * 4] = dB[k * 4]; md[k * 4 + 1] = dA[k * 4]; md[k * 4 + 3] = 255; }
+      cA.width = cA.height = cB.width = cB.height = 1;
+      var mtex = keep(new THREE.DataTexture(md, MS, MS, THREE.RGBAFormat, THREE.UnsignedByteType));
+      mtex.minFilter = THREE.LinearFilter; mtex.magFilter = THREE.LinearFilter; mtex.generateMipmaps = false; mtex.needsUpdate = true;
+      // siatka kępek w kole o promieniu RAD (komórka CS), każda kępka to dwie skrzyżowane karty
+      var CS = hi ? 0.36 : 0.5, RAD = hi ? 34 : 24, G2 = Math.ceil(RAD / CS), pos = [], uv = [], cell = [], nor = [], ix = [], vc = 0;
+      var QX = [[-0.17, 0, 0.17, 0], [0, -0.17, 0, 0.17]];
+      for (var gz = -G2; gz <= G2; gz++) for (var gx = -G2; gx <= G2; gx++) {
+        if (gx * gx + gz * gz > G2 * G2) continue;
+        for (var c2 = 0; c2 < 2; c2++) {
+          var Qd = QX[c2];
+          pos.push(Qd[0], 0, Qd[1], Qd[2], 0, Qd[3], Qd[2], 1, Qd[3], Qd[0], 1, Qd[1]);
+          uv.push(0, 1, 1, 1, 1, 0, 0, 0);
+          for (var v4 = 0; v4 < 4; v4++) { cell.push(gx, gz); nor.push(0, 1, 0); }
+          ix.push(vc, vc + 1, vc + 2, vc, vc + 2, vc + 3); vc += 4;
+        }
+      }
+      var gg = keep(new THREE.BufferGeometry());
+      gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      gg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      gg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      gg.setAttribute('aCell', new THREE.Float32BufferAttribute(cell, 2));
+      gg.setIndex(new THREE.Uint32BufferAttribute(ix, 1));
+      var GU = self.grassU = {
+        o: { value: new THREE.Vector3(0, 0, CS) }, xf: { value: new THREE.Vector4(fx0, fz0, 1 / FL, 1 / FL) },
+        mask: { value: mtex }, r: { value: new THREE.Vector2(RAD, 0.15) }, t: self.windU
+      };
+      var GV_PARS = '\nuniform vec3 uGrassO;\nuniform vec4 uGrassXf;\nuniform sampler2D uGrassMask;\nuniform vec2 uGrassR;\nuniform float uWindT;\nattribute vec2 aCell;\n';
+      var GV_BEGIN = [
+        'vec2 gC = floor( uGrassO.xy / uGrassO.z ) + aCell;',
+        'vec3 gH = fract( vec3( gC.xyx ) * vec3( 0.1031, 0.1030, 0.0973 ) );',
+        'gH += dot( gH, gH.yzx + 33.33 );',
+        'gH = fract( ( gH.xxy + gH.yzz ) * gH.zyx );',
+        'vec2 gW = ( gC + gH.xy ) * uGrassO.z;',
+        'vec4 gM = texture2D( uGrassMask, ( gW - uGrassXf.xy ) * uGrassXf.zw );',
+        'float gD = distance( gW, uGrassO.xy );',
+        // dalej od krawędzi asfaltu pewniej (pole odległości: R*20 m), na skraju koła kępki maleją
+        'float gS = step( 0.2 + 0.6 * gH.z, gM.g ) * smoothstep( 0.03, 0.06, gM.r ) * ( 1.0 - smoothstep( uGrassR.x * 0.55, uGrassR.x, gD ) );',
+        'gS *= 0.55 + 0.75 * gH.z;',
+        'float gA = gH.x * 6.2832, gCa = cos( gA ), gSa = sin( gA );',
+        'vec3 transformed = vec3( position );',
+        'transformed.xz = vec2( gCa * position.x - gSa * position.z, gSa * position.x + gCa * position.z ) * ( 0.8 + 0.5 * gH.y ) * step( 0.02, gS );',
+        'transformed.y *= uGrassR.y * gS;',
+        'float gWv = sin( uWindT * 1.9 + gW.x * 0.35 + gW.y * 0.21 ) * 0.6 + sin( uWindT * 3.7 + gW.x * 1.3 ) * 0.3;',
+        'transformed.xz += position.y * gS * uGrassR.y * vec2( 0.4, 0.25 ) * gWv;',
+        'transformed.x += gW.x; transformed.z += gW.y; transformed.y -= 0.035;'
+      ].join('\n');
+      var gm = M.grassTuft;
+      farShadowMat(gm, farU, function (sh) {
+        sh.uniforms.uGrassO = GU.o; sh.uniforms.uGrassXf = GU.xf; sh.uniforms.uGrassMask = GU.mask; sh.uniforms.uGrassR = GU.r; sh.uniforms.uWindT = GU.t;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>' + GV_PARS).replace('#include <begin_vertex>', GV_BEGIN);
+        sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', NO_FLIP);
+      }, 'g');
+      var mesh = new THREE.Mesh(gg, gm);
+      mesh.frustumCulled = false; mesh.castShadow = false; mesh.receiveShadow = shadowsOn;
+      mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+      scene.add(mesh);
+      self.grassMesh = mesh;
     });
     try { fg.setTransform(1, 0, 0, 1, 0, 0); fg.globalCompositeOperation = 'source-over'; } catch (e) { /* nic */ }
     farTex.needsUpdate = true;
@@ -1585,6 +2005,7 @@
     M.runoff.color.setScalar(w ? 0.6 : 0.96); M.runoff.roughness = w ? 0.28 : 1;
     M.kerb.roughness = w ? 0.22 : 0.55; M.paint.roughness = w ? 0.22 : 0.6; M.chk.roughness = w ? 0.25 : 0.6;
     M.grass.color.setRGB(w ? 0.8 : 1, w ? 0.86 : 1, w ? 0.8 : 1); M.lawn.color.copy(M.grass.color);
+    if (M.grassTuft) M.grassTuft.color.copy(M.grass.color);
     M.gravel.color.setScalar(w ? 0.72 : 1);
     M.paddock.color.setScalar(w ? 0.7 : 1); M.paddock.roughness = w ? 0.35 : 0.9;
     M.concrete.color.setScalar(w ? 0.82 : 1); M.concrete.roughness = w ? 0.6 : 0.88;
@@ -1616,6 +2037,12 @@
         if (l > 1e-3) this.fwd.set(v.x / l * f, 0, v.z / l * f); else this.fwd.set(0, 0, 0);
       } else this.fwd.set(0, 0, 0);
       this._placeSun();
+    }
+    // wiatr (drzewa, trawa) i środek siatki trawy 3D (z góry trawy nie widać — wyłączona)
+    if (this.windU) this.windU.value = this.time;
+    if (this.grassU && this.grassMesh) {
+      this.grassMesh.visible = cp.y < 14;
+      this.grassU.o.value.x = cp.x; this.grassU.o.value.y = cp.z;
     }
     // las: szczegółowe drzewa tylko w pobliżu kamery
     var C = this.treeChunks, nr = this.treeNear, fr = nr + 60;

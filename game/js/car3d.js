@@ -424,13 +424,14 @@
     var prof = q.det ? ellProf(0.03, 0.045, 8) : rectProf(0.055, 0.08);
     B.add('paint', sweep(path, prof, q.det ? 24 : 6), S_GRY);
     if (!q.det) return;
+    // uproszczona kierownica: osobna siatka (w widoku z kokpitu zastępuje ją szczegółowy model z PG.Cockpit3D)
     var sw = box(-0.016, 0.016, -0.055, 0.055, -0.12, 0.12);
     sw.rotateZ(0.55); sw.translate(0.72, 0.56, 0);
-    B.add('carbon', sw, 'tri');
+    B.add('sw', sw, 'tri');
     var disp = box(-0.003, 0.003, -0.025, 0.03, -0.05, 0.05);
     disp.rotateZ(0.55); disp.translate(0.70, 0.56, 0);
-    B.add('paint', disp, S_BLK);
-    [1, -1].forEach(function (s) { B.add('paint', strut([0.71, 0.5, 0.115 * s], [0.735, 0.615, 0.12 * s], 0.03, 0.03, 6), S_BLK); });
+    B.add('sw', disp, 'tri');
+    [1, -1].forEach(function (s) { B.add('sw', strut([0.71, 0.5, 0.115 * s], [0.735, 0.615, 0.12 * s], 0.03, 0.03, 6), 'tri'); });
   }
 
   // ---------- halo, lusterka ----------
@@ -775,7 +776,7 @@
     var r1 = wr.clone(); r1.translate(0, 0, ZR);
     var r2 = wrl.clone(); r2.translate(0, 0, -ZR);
     var G = {
-      paint: full, paintBody: body, carbon: B.build('carbon'), dark: B.build('dark'), driver: B.build('driver'), rain: B.build('rain'),
+      paint: full, paintBody: body, carbon: B.build('carbon'), dark: B.build('dark'), driver: B.build('driver'), rain: B.build('rain'), sw: B.build('sw'),
       fwR: fw.R, fwL: fw.L, rwMain: rw.main, rwLights: rw.lights, drs: rw.flap, rod: rodGeo(q),
       wheelFR: wf, wheelFL: wfl, wheelRear: merge([r1, r2]), wheelRR: wr, wheelRL: wrl, hub: q.det ? frontHub(q) : null,
       scuff: scuffGeo([spine, pods, mirrorZ(pods)])
@@ -1182,6 +1183,7 @@
     add(G.carbon, carbon, null, 'carbon');
     if (G.dark) add(G.dark, titan, null, 'titan');
     add(G.driver, drv, null, 'driver');
+    var steerWheel = add(G.sw, carbon, null, 'steerWheel');
     var rain = add(G.rain, rainMat, null, 'rain', false);
     // połówki przedniego skrzydła: osobne siatki widoczne dopiero po uszkodzeniu (wcześniej są częścią nadwozia)
     var fwR = group('fwR', FWP, 1), fwL = group('fwL', FWP, -1);
@@ -1216,7 +1218,7 @@
       cockpit: anchor('cockpit', 0.41, 0.765, 0, -PI / 2), tcam: anchor('tcam', -0.08, 1.07, 0, -PI / 2),
       rearEmitter: anchor('rearEmitter', -2.98, 0.22, 0), frontEmitter: anchor('frontEmitter', 2.88, 0.08, 0),
       // części ruchome i stan animacji
-      G: G, hiQ: hiQ, body: body, fw: { fwR: fwR, fwL: fwL }, rw: rw, rwMain: rwMain, rod: rod, rwLights: rwLights,
+      G: G, hiQ: hiQ, body: body, steerWheel: steerWheel, fw: { fwR: fwR, fwL: fwL }, rw: rw, rwMain: rwMain, rod: rod, rwLights: rwLights,
       shadow: shadow, shadowOff: false, spinF: [0, 0], lockF: [0, 0], ws: 0, heatSet: -1,
       drsTgt: 0, drsFrom: 0, drsAge: 1, drsX: 0, drsAng: -1, drsStuck: 0,
       // uszkodzenia
