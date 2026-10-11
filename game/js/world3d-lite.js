@@ -1224,7 +1224,8 @@
     safe('guma', function () {
       if (!M.rubber || !TX.streak || !PG.speedProfile || !PG.carParams || !PG.DEFAULT_TEAMS) return;
       var tm = PG.DEFAULT_TEAMS[0], pp = PG.carParams(tm, tm.drivers[0]);
-      var prof = PG.speedProfile(T, { power: pp.power, cd: pp.cd, gripMul: pp.gripMul, aeroMul: pp.aeroMul, brakeMul: 1 });
+      var sp = PG.speedProfile(T, { power: pp.power, cd: pp.cd, gripMul: pp.gripMul, aeroMul: pp.aeroMul, brakeMul: 1 });
+      var prof = sp && sp.v;
       if (!prof || prof.length !== N) return;
       var ext = Math.round(14 / ds), lim = hw - 0.25;
       runs(N, function (i) { return prof[(i + 1) % N] < prof[i] - 0.02; }).forEach(function (r, ri) {
@@ -1760,7 +1761,7 @@
       if (R2D.treeGrid && R2D.treeGrid.forEach) R2D.treeGrid.forEach(function (arr) { for (var t = 0; t < arr.length; t++) list.push(arr[t]); });
       if (!list.length) return;
       self.treeCount = list.length;
-      var step = hi ? 1 : q === 'medium' ? 2 : 3, det = lo ? 0 : 1, NV = 2; // NV wariantów każdego kształtu
+      var step = hi ? 1 : q === 'medium' ? 2 : 3, det = hi ? 1 : 0, NV = 2; // NV wariantów każdego kształtu; poniżej wysokiej jakości mniej kart liści
       var nearGeo = [];
       TREE_SHAPES.forEach(function (S, k) { for (var vv = 0; vv < NV; vv++) nearGeo.push(keep(treeGeo(S, det, k * 10 + vv))); });
       var farGeo = keep(treeFarGeo());

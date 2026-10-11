@@ -266,8 +266,19 @@
       if (!hidBox) return;
       hidBox.innerHTML = '';
       if (D.connected()) {
-        hidBox.appendChild(h('div', { class: 'row' }, h('span', { class: 'pill green', text: 'Adaptacyjne spusty aktywne · ' + (D.bt ? 'Bluetooth' : 'USB') }),
+        hidBox.appendChild(h('div', { class: 'row' }, h('span', { class: 'pill green', text: 'DualSense połączony · ' + (D.bt ? 'Bluetooth' : 'USB') }),
           h('button', { type: 'button', class: 'small', text: 'Rozłącz', onclick: function () { D.disconnect().then(renderHid, renderHid); } })));
+        hidBox.appendChild(h('div', { class: 'field' }, 'Adaptacyjne spusty', onOff(st.trig !== false, function (v) {
+          st.trig = v; Store.save(); if (!v) D.off();
+        }, ['Włączone', 'Wyłączone'])));
+        var tg = h('input', { type: 'range', min: 0, max: 100, value: Math.round((st.trigGain === undefined ? 0.8 : st.trigGain) * 100), oninput: function () {
+          st.trigGain = tg.value / 100; Store.save();
+        } });
+        var tb = h('button', { type: 'button', class: 'small', text: 'Test spustów', onclick: function () {
+          if (D.test(st.trigGain === undefined ? 0.8 : st.trigGain)) UI.toast('Naciśnij L2 i R2 — opór przez 3 sekundy');
+          else UI.toast('Nie udało się wysłać efektu do pada');
+        } });
+        hidBox.appendChild(h('label', { class: 'field' }, 'Opór spustów', h('div', { class: 'row', style: 'flex-wrap:nowrap' }, tg, tb)));
       } else {
         hidBox.appendChild(h('button', { type: 'button', text: 'Połącz DualSense: adaptacyjne spusty', onclick: function () {
           D.connect().then(function (ok) {
@@ -276,12 +287,14 @@
           }, function () { renderHid(); });
         } }));
       }
-      hidBox.appendChild(note('Spust L2 stawia opór rosnący z prędkością i pulsuje, gdy koła się blokują, a R2 drży przy buksowaniu. Pasek świetlny świeci w kolorze zespołu. Przeglądarka poprosi o zgodę na dostęp do pada.'));
+      hidBox.appendChild(note('L2 działa jak pedał hamulca: twardnieje w miarę wciskania (mocniej przy dużej prędkości), drży przy pracy ABS i odbija, gdy koła się blokują. R2 ma lekką sprężynę, szarpie przy zmianie biegu w górę i drży na ograniczniku obrotów, przy buksowaniu, pracy kontroli trakcji, na żwirze, trawie i krawężnikach. Pasek świetlny świeci w kolorze zespołu. Przeglądarka poprosi o zgodę na dostęp do pada.'));
     };
     if (D && D.available && D.available()) {
       hidBox = h('div', { class: 'col', style: 'gap:6px' });
       kp.appendChild(hidBox);
       renderHid();
+    } else if (D) {
+      kp.appendChild(note('Adaptacyjne spusty DualSense wymagają Chrome albo Edge (WebHID) i gry otwartej z adresu localhost albo https. W tej przeglądarce działają tylko zwykłe wibracje.'));
     }
     kp.appendChild(padControls());
     g2.appendChild(kp);

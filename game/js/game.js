@@ -12,7 +12,7 @@
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---------- USTAWIENIA: domyślne wartości nowych kluczy (career.js zostaje bez zmian) ----------
-  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, post: true };
+  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true };
   G.mergeSettings = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     if (!st) return;
@@ -362,23 +362,25 @@
 
   // ---------- WIBRACJE ----------
   G.stopHaptics = function () {
-    G.hapOn = false;
+    G.hapOn = false; G.rumOn = false;
     try { if (PG.Haptics) PG.Haptics.stop(); } catch (e) { /* nic */ }
   };
-  // Wibracje tylko dla gracza w aktywnej sesji (bez symulacji, pauzy, po mecie i bez fokusu)
-  G.hapticsWanted = function () {
-    var S = G.S, p = S && S.player, st = PG.Store.data.settings;
+  // Wibracje i spusty tylko dla gracza w aktywnej sesji (bez symulacji, pauzy, po mecie i bez fokusu)
+  G.padFxWanted = function () {
+    var S = G.S, p = S && S.player;
     return !!(PG.Haptics && !G.hapErr && S && (G.mode === 'race' || G.mode === 'quali') && !G.paused && !G.spectate && !S.autoPlayer &&
-      p && !p.finished && st.haptics !== false && G.focused && !document.hidden && padConnected());
+      p && !p.finished && G.focused && !document.hidden && padConnected());
   };
+  G.hapticsWanted = function () { return G.padFxWanted() && PG.Store.data.settings.haptics !== false; };
   G.hapticsFrame = function (S, dt) {
     if (G.hapErr) return;
     try {
-      if (G.hapticsWanted()) {
-        var gain = PG.Store.data.settings.hapticsGain;
-        PG.Haptics.setGain(gain);
-        PG.Haptics.update(S.player, dt);
-        if (PG.DualSenseHID) PG.DualSenseHID.update(S.player, true, gain);
+      if (G.padFxWanted()) {
+        var st = PG.Store.data.settings;
+        if (st.haptics !== false) { PG.Haptics.setGain(st.hapticsGain); PG.Haptics.update(S.player, dt); G.rumOn = true; }
+        else if (G.rumOn) { G.rumOn = false; PG.Haptics.silence(); }
+        // adaptacyjne spusty mają osobny przełącznik i siłę (wyłączone — zwolnione)
+        if (PG.DualSenseHID) PG.DualSenseHID.update(S.player, st.trig !== false, st.trigGain === undefined ? 0.8 : st.trigGain);
         G.hapOn = true;
       } else if (G.hapOn) G.stopHaptics();
     } catch (e) { G.hapErr = true; G.stopHaptics(); console.warn('Wibracje wyłączone po błędzie:', e); }

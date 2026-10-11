@@ -191,6 +191,7 @@
     var cd = p.cd * dp.drag * (car.drsOpen ? 0.86 : 1) * (car.slip || 1);
     var acc = 0, uxF = 0, uxR = 0, lockT = 0, spinT = 0, reversing = false;
     var thr = clamp(car.throttle || 0, 0, 1), brk = clamp(car.brake || 0, 0, 1);
+    car.absAct = 0; car.tcAct = 0; // praca ABS i kontroli trakcji (0..1) — dla adaptacyjnych spustów pada
     if (thr > 0) {
       var tracCap = (P.tracA0 + P.tracB * p.aeroMul * v2 * aR) * grip * (car.launchBoost || 1);
       var tracAv = tracCap * combGrip(ulR); // trakcja pozostała przy obecnym skręcie
@@ -200,6 +201,7 @@
         // kontrola trakcji: gaz to ułamek dostępnej trakcji
         drive = (eng < tracAv ? eng : tracAv) * thr;
         if (eng * thr > tracAv * 1.25 && av < 30) spinT = 0.12;
+        if (eng * thr > tracAv) car.tcAct = clamp((eng * thr / Math.max(tracAv, 0.01) - 1) / 0.6, 0, 1);
       } else {
         var dem = eng * thr;
         spinT = tracAv > 0.01 ? clamp((dem / tracAv - 1) / 1.5, 0, 1) : (dem > 0.01 ? 1 : 0);
@@ -223,7 +225,9 @@
             var ulL = latF > 0.01 ? Math.min(1, kl * v2 / latF) : 0;
             ulB = ulMax < ulL ? ulMax : ulL;
           }
-          ux = Math.min(req, combGrip(ulB));
+          var gB = combGrip(ulB);
+          ux = Math.min(req, gB);
+          if (av > 4 && req > gB) car.absAct = clamp((req - gB) / 0.25, 0, 1);
         } else {
           var lx = combGrip(ulF) * (kerb ? 0.9 : 1) * (1 - 0.08 * flat);
           if (av > 4 && req > lx) lockT = clamp((req - lx) / 0.3, 0, 1);

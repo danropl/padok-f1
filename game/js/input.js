@@ -341,11 +341,15 @@
     }
   };
 
-  // Stop: pauza, koniec sesji, utrata fokusu
-  H.stop = function () {
+  // Wyciszenie samych wibracji (spusty zostają)
+  H.silence = function () {
     for (var i = 0; i < NIMP; i++) H.imp[i].dur = 0;
     H.kick = false; H.gear = 0;
     if (!H.idle) { H.idle = true; H.reset(); }
+  };
+  // Stop: pauza, koniec sesji, utrata fokusu
+  H.stop = function () {
+    H.silence();
     if (PG.DualSenseHID) { try { PG.DualSenseHID.off(); } catch (e) { /* nic */ } }
   };
 
@@ -367,8 +371,8 @@
     usbLen: 47, btLen: 77,
     cm: new Uint8Array(47),          // wspólna część raportu wyjściowego
     trR: new Uint8Array(11), trL: new Uint8Array(11),
-    keyR: -1, keyL: -1, rgb: [0, 60, 255], rgbKey: '', lightDirty: true,
-    flashT: -1e9, lastT: -1e9, inited: false,
+    rgb: [0, 60, 255], rgbKey: '', lightDirty: true,
+    flashT: -1e9, lastT: -1e9, inited: false, gear: 0, kickT: 0, testUntil: 0,
     onChange: null
   };
   DS.trR[0] = 0x05; DS.trL[0] = 0x05;
@@ -444,10 +448,27 @@
     a[3] = zones & 255; a[4] = (zones >>> 8) & 255; a[5] = (zones >>> 16) & 255; a[6] = (zones >>> 24) & 255;
     if (mode === 0x26) a[9] = freq & 255;
   }
-  // Opór od strefy pos (0–9), siła 1–8
-  function trigFeedback(a, pos, str) { if (str < 1) trigOff(a); else trigZones(a, 0x21, clamp(pos, 0, 9), clamp(str, 1, 8), 0); }
+  // Opór w strefach skoku 0–9 (tryb 0x21): F[i] = siła 0–8 w strefie i (0 = brak oporu); rosnące F daje twardniejący spust
+  function trigResist(a, F) {
+    var act = 0, zones = 0, any = false;
+    for (var i = 0; i < 10; i++) {
+      var f = clamp(Math.round(F[i]), 0, 8);
+      if (f > 0) { act |= 1 << i; zones += (f - 1) * Math.pow(8, i); any = true; }
+    }
+    if (!any) { trigOff(a); return; }
+    a.fill(0);
+    a[0] = 0x21;
+    a[1] = act & 255; a[2] = (act >> 8) & 255;
+    a[3] = zones & 255; a[4] = (zones >>> 8) & 255; a[5] = (zones >>> 16) & 255; a[6] = (zones >>> 24) & 255;
+  }
   // Wibracja od strefy pos, amplituda 1–8, częstotliwość w Hz
-  function trigVibration(a, pos, amp, freq) { if (amp < 1 || freq < 1) trigOff(a); else trigZones(a, 0x26, clamp(pos, 0, 9), clamp(amp, 1, 8), clamp(freq, 1, 255)); }
+  function trigVibration(a, pos, amp, freq) { if (amp < 1 || freq < 1) trigOff(a); else trigZones(a, 0x26, clamp(pos, 0, 9), clamp(Math.round(amp), 1, 8), clamp(Math.round(freq), 1, 255)); }
+  function same(a, b) { for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; }
+
+  // Krzywe oporu w strefach skoku: twardniejący pedał hamulca i lekka sprężyna gazu
+  var BRAKE_CURVE = [0, 1, 2, 3, 4, 5, 6, 7, 8, 8];
+  var THROTTLE_CURVE = [0, 0, 1, 1, 1.5, 2, 2, 2.5, 3, 3];
+  var TL = new Uint8Array(11), TR = new Uint8Array(11), FZ = new Float32Array(10);
 
   function buildCommon(setup) {
     var c = DS.cm;
@@ -465,7 +486,6 @@
     var fl = now() < DS.flashT;
     c[44] = fl ? 255 : DS.rgb[0]; c[45] = fl ? 40 : DS.rgb[1]; c[46] = fl ? 0 : DS.rgb[2];
   }
-
   function dsFail(e) {
     if (++DS.fails >= 3 && DS.ok) { DS.ok = false; console.warn('DualSense WebHID wyłączony:', e); if (DS.onChange) { try { DS.onChange(false); } catch (e2) { /* nic */ } } }
   }
@@ -521,7 +541,7 @@
         // odczyt kalibracji przełącza pad BT w pełny tryb raportów
         try { var fr = dev.receiveFeatureReport(0x05); if (fr && fr.then) fr.then(noop, noop); } catch (e) { /* nic */ }
       }
-      trigOff(DS.trR); trigOff(DS.trL); DS.keyR = DS.keyL = 0;
+      trigOff(DS.trR); trigOff(DS.trL); DS.gear = 0;
       sendNow();
       if (DS.onChange) { try { DS.onChange(true); } catch (e2) { /* nic */ } }
       return true;
@@ -571,41 +591,48 @@
     DS.lightDirty = true;
   };
 
-  // Spusty co klatkę (najwyżej 20 raportów/s, tylko przy zmianie)
+  // Spusty co klatkę (najwyżej 25 raportów/s, tylko przy zmianie). on = false zwalnia oba spusty.
+  // L2 (hamulec): twardniejący pedał (mocniej przy prędkości), drgania ABS, odbicie przy blokowaniu kół.
+  // R2 (gaz): lekka sprężyna, szarpnięcie przy zmianie biegu w górę, ogranicznik obrotów, buksowanie,
+  // praca kontroli trakcji, żwir, trawa i krawężniki.
   DS.update = function (car, on, gain) {
     if (!DS.dev || !DS.ok) return;
     var t = now();
-    if (t - DS.lastT < 50) return;
+    if (t < DS.testUntil || t - DS.lastT < 40) return;
     gain = clamp(num(gain, 0.8), 0, 1);
-    var kL = 0, kR = 0, ampL = 0, frL = 0, strL = 0, ampR = 0, frR = 0;
+    trigOff(TL); trigOff(TR);
     if (on && car && gain > 0.01) {
-      var v = Math.abs(num(car.v, 0)), lk = clamp(num(car.lock, 0), 0, 1), ws = clamp(num(car.wspin, 0), 0, 1);
-      var g = Math.min(1, gain * 1.25);
-      // L2 (hamulec): opór rośnie z prędkością; przy blokadzie kół pulsuje
-      if (lk > 0.3 && v > 3) {
-        ampL = Math.max(1, Math.round((2 + 6 * lk) * g)); frL = 24 + Math.round(16 * lk);
-        kL = 20000 + ampL * 1000 + frL;
-      } else {
-        strL = Math.max(1, Math.round((1 + 6 * clamp(v / 85, 0, 1)) * g));
-        kL = 10000 + strL;
+      var g = Math.min(1, gain * 1.25), v = Math.abs(num(car.v, 0)), i;
+      var lk = clamp(num(car.lock, 0), 0, 1), abs = clamp(num(car.absAct, 0), 0, 1), ws = clamp(num(car.wspin, 0), 0, 1), tc = clamp(num(car.tcAct, 0), 0, 1);
+      var thr = clamp(num(car.throttle, 0), 0, 1), rpm = num(car.rpm, 8000), surf = car.surface, sf = clamp(v / 25, 0, 1);
+      // L2
+      if (lk > 0.25 && v > 3) trigVibration(TL, 1, Math.max(1, (3 + 5 * lk) * g), 22 + 14 * lk);
+      else if (abs > 0.12 && v > 3) trigVibration(TL, 2, Math.max(1, (2 + 3 * abs) * g), 15 + 5 * abs);
+      else {
+        var kb = g * (0.7 + 0.3 * clamp(v / 70, 0, 1));
+        for (i = 0; i < 10; i++) FZ[i] = BRAKE_CURVE[i] * kb;
+        trigResist(TL, FZ);
       }
-      // R2 (gaz): drżenie przy buksowaniu
-      if (ws > 0.15 && v > 0.5) {
-        ampR = Math.max(1, Math.round((1 + 6 * ws) * g)); frR = 35 + Math.round(30 * clamp((num(car.rpm, 8000) - 6000) / 7000, 0, 1));
-        kR = 20000 + ampR * 1000 + frR;
+      // R2
+      var gear = num(car.gear, 0) | 0;
+      if (DS.gear && gear > DS.gear && thr > 0.5 && v > 3) DS.kickT = t + 90;
+      DS.gear = gear;
+      if (t < DS.kickT) trigVibration(TR, 2, Math.max(1, 6 * g), 34);
+      else if (rpm >= 12600 && thr > 0.8) trigVibration(TR, 6, Math.max(1, 3 * g), 140);
+      else if (ws > 0.15 && v > 0.5) trigVibration(TR, 2, Math.max(1, (2 + 5 * ws) * g), 35 + 30 * clamp((rpm - 6000) / 7000, 0, 1));
+      else if (tc > 0.2 && thr > 0.3) trigVibration(TR, 4, Math.max(1, (1 + 2 * tc) * g), 55);
+      else if ((surf === 'gravel' || surf === 'grass') && v > 4) trigVibration(TR, 1, Math.max(1, (surf === 'gravel' ? 4 : 3) * sf * g), surf === 'gravel' ? 24 : 16);
+      else if (surf === 'kerb' && v > 8) trigVibration(TR, 1, Math.max(1, 3 * sf * g), 30);
+      else {
+        var ka = g * (car.dmg && num(car.dmg.engine, 0) > 0.3 ? 0.5 : 1); // uszkodzony silnik: miękki gaz
+        for (i = 0; i < 10; i++) FZ[i] = THROTTLE_CURVE[i] * ka;
+        trigResist(TR, FZ);
       }
-    }
+    } else DS.gear = 0;
     var fl = t < DS.flashT, lk2 = fl ? 'f' : 'n';
-    if (kL === DS.keyL && kR === DS.keyR && lk2 === DS.rgbKey && !DS.lightDirty) return;
+    if (same(TL, DS.trL) && same(TR, DS.trR) && lk2 === DS.rgbKey && !DS.lightDirty) return;
     DS.lastT = t;
-    if (kL !== DS.keyL) {
-      if (kL >= 20000) trigVibration(DS.trL, 2, ampL, frL); else if (kL >= 10000) trigFeedback(DS.trL, 2, strL); else trigOff(DS.trL);
-      DS.keyL = kL;
-    }
-    if (kR !== DS.keyR) {
-      if (kR >= 20000) trigVibration(DS.trR, 1, ampR, frR); else trigOff(DS.trR);
-      DS.keyR = kR;
-    }
+    DS.trL.set(TL); DS.trR.set(TR);
     DS.rgbKey = lk2; DS.lightDirty = false;
     sendNow();
   };
@@ -613,10 +640,26 @@
   // Zwolnienie spustów (pauza, koniec, utrata fokusu)
   DS.off = function () {
     if (!DS.dev || !DS.ok) return;
-    if (DS.keyL === 0 && DS.keyR === 0) return;
-    trigOff(DS.trL); trigOff(DS.trR); DS.keyL = 0; DS.keyR = 0;
+    DS.gear = 0; DS.kickT = 0;
+    trigOff(TL); trigOff(TR);
+    if (same(TL, DS.trL) && same(TR, DS.trR)) return;
+    DS.trL.set(TL); DS.trR.set(TR);
     DS.lastT = now();
     sendNow();
+  };
+
+  // Test z ustawień: pełne krzywe oporu na 3 s
+  DS.test = function (gain) {
+    if (!DS.dev || !DS.ok) return false;
+    var g = Math.min(1, clamp(num(gain, 0.8), 0, 1) * 1.25), i;
+    for (i = 0; i < 10; i++) FZ[i] = BRAKE_CURVE[i] * g;
+    trigResist(DS.trL, FZ);
+    for (i = 0; i < 10; i++) FZ[i] = THROTTLE_CURVE[i] * g * 1.6;
+    trigResist(DS.trR, FZ);
+    DS.testUntil = now() + 3000;
+    sendNow();
+    setTimeout(function () { DS.testUntil = 0; DS.off(); }, 3000);
+    return true;
   };
 
   // Ponowne połączenie z padem, na który użytkownik już wcześniej się zgodził
