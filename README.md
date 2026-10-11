@@ -25,6 +25,10 @@ Workflow `.github/workflows/pages.yml` buduje stronę i publikuje ją na GitHub 
 
 Uzupełnij dane właściciela w `src/site.ts` (nazwa, adres, NIP, e-mail) i nazwę hostingu w polityce prywatności (`src/pages/Legal.tsx`). Do tego czasu strona pokazuje je jako wyróżnione pola do uzupełnienia.
 
+## Gra Monza Grand Prix
+
+Katalog `game/` to osobna gra wyścigowa F1 w przeglądarce (HTML + JavaScript + three.js, bez budowania). Nie jest częścią strony i nie trafia do paczki z `npm run build`. Szczegóły i sterowanie: [`game/README.md`](game/README.md).
+
 ## Profile kierowców i zespołów
 
 Funkcja `supabase/functions/sync-profiles` (pg_cron co 3 godziny) składa opisy karier i zespołów z wyników Jolpica-F1
