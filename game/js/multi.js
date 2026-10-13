@@ -154,9 +154,9 @@
     return Net.ready().then(function () { return Net.room(code, false, handlers()); }).then(function (room) {
       M.room = room; M.isHost = false; M.joinAt = now();
       room.track({ id: me().id, name: me().name });
-      room.toHost({ t: 'hello', name: me().name }, true);
+      room.toHost({ t: 'hello', name: me().name, v: PG.VERSION }, true);
       // powtórne powitanie, gdyby host jeszcze nie słuchał
-      M.helloTimer = setInterval(function () { if (M.L || !M.room) { clearInterval(M.helloTimer); return; } M.room.toHost({ t: 'hello', name: me().name }, true); }, 2500);
+      M.helloTimer = setInterval(function () { if (M.L || !M.room) { clearInterval(M.helloTimer); return; } M.room.toHost({ t: 'hello', name: me().name, v: PG.VERSION }, true); }, 2500);
       return code;
     });
   };
@@ -247,6 +247,7 @@
       if (t === 'hello') {
         if (!L) return;
         if (!pl) {
+          if (m.v !== PG.VERSION) { M.room.sendTo(from, { t: 'deny', why: 'Masz inną wersję gry niż host (Ty: ' + (m.v || 'starsza') + ', host: ' + PG.VERSION + '). Zaktualizujcie obaj grę (start.command / start.bat albo git pull) i odświeżcie stronę.' }, true); return; }
           if (L.st !== 'lobby') { M.room.sendTo(from, { t: 'deny', why: 'W tym lobby trwa już wyścig' }, true); return; }
           if (L.players.length >= L.cfg.max) { M.room.sendTo(from, { t: 'deny', why: 'Lobby jest pełne' }, true); return; }
           pl = { id: from, name: String(m.name || 'Gracz').replace(/[<>]/g, '').slice(0, 24), team: null, d: 0, ready: false, drv: null, link: 'wait' };

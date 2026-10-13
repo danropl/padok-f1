@@ -98,7 +98,7 @@
   }
   UI.toast = function (t) {
     var el = h('div', { class: 'toast', text: t }); document.getElementById('app').appendChild(el);
-    setTimeout(function () { el.remove(); }, 1800);
+    setTimeout(function () { el.remove(); }, Math.max(1800, String(t).length * 55)); // dłuższe komunikaty dłużej na ekranie
   };
   function confirmInline(btn, label, onYes) {
     var parent = btn.parentNode, box = h('span', { class: 'row' }, h('span', { class: 'muted', text: label }),
@@ -157,7 +157,7 @@
       h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
       h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('Options'), ' pauza'),
       h('div', {}, 'Na telefonie działa sterowanie dotykowe.')));
-    w.appendChild(h('p', { class: 'muted', style: 'font-size:13px', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.' }));
+    w.appendChild(h('p', { class: 'muted', style: 'font-size:13px', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1. Wersja ' + PG.VERSION + '.' }));
     s.appendChild(w);
   };
 

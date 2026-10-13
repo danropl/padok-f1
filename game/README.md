@@ -6,12 +6,23 @@ Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Bibliote
 
 ## Uruchomienie
 
-Gra działa wyłącznie w 3D i wymaga przeglądarki z WebGL (aktualny Chrome, Edge, Firefox lub Safari z włączonym przyspieszeniem sprzętowym). Otwórz `index.html` w przeglądarce albo uruchom dowolny serwer statyczny w tym katalogu:
+Gra działa wyłącznie w 3D i wymaga przeglądarki z WebGL (aktualny Chrome, Edge, Firefox lub Safari z włączonym przyspieszeniem sprzętowym).
+
+Gra jest na gałęzi `claude/f1-game-github-export-1jz93w`. Gałąź `main` (domyślna na GitHubie) jej nie zawiera, dlatego klonuj z `-b`:
 
 ```bash
-cd game
-python3 -m http.server 8000   # potem http://localhost:8000
+git clone -b claude/f1-game-github-export-1jz93w https://github.com/danropl/padok-f1.git
 ```
+
+Potem uruchamiaj grę skryptem z katalogu `game`. Skrypt najpierw pobiera najnowszą wersję (`git pull`), a potem otwiera grę w przeglądarce:
+
+- **macOS:** dwuklik `start.command` w Finderze albo w Terminalu `./start.command`
+- **Windows:** dwuklik `start.bat`
+- **ręcznie:** `python3 serve.py`, potem http://localhost:8000
+
+`serve.py` wyłącza pamięć podręczną przeglądarki, więc po aktualizacji zawsze ładuje się nowa wersja. Przy zwykłym `python3 -m http.server` Safari i Chrome potrafią przez kilka godzin pokazywać stare pliki; pomaga wtedy twarde odświeżenie (Cmd+Shift+R albo Ctrl+Shift+R).
+
+Wersja gry jest widoczna na dole menu. W multiplayer wszyscy gracze muszą mieć tę samą wersję, inaczej host odmówi dołączenia.
 
 Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod kluczem `pixelgp-save-v1`.
 
@@ -78,4 +89,5 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/audio.js` | dźwięk silnika i efekty (Web Audio) |
 | `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/game.js` | pętla gry |
+| `serve.py`, `start.command`, `start.bat` | lokalny serwer bez pamięci podręcznej i uruchamianie z aktualizacją |
 | `js/ui.js` | menu, HUD, kreator, ustawienia |
