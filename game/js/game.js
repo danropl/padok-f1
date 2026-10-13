@@ -2,8 +2,8 @@
 (function (PG) {
   'use strict';
   var G = PG.Game = {
-    S: null, mode: 'none', paused: false, timeScale: 1, input: {}, cam: { x: 0, y: 0 }, shake: 0,
-    sheets: new Map(), last: 0, hudT: 0, msgT: 0, endT: 0, attractT: 0, attractCar: 0,
+    S: null, mode: 'none', paused: false, timeScale: 1, input: {},
+    last: 0, hudT: 0, msgT: 0, endT: 0, attractT: 0, attractCar: 0,
     focused: true, hapOn: false, hapErr: false, padErr: false, navErr: false, padUsed: false
   };
 
@@ -22,6 +22,7 @@
     if (st.damage !== 'off' && st.damage !== 'visual' && st.damage !== 'full') st.damage = 'full';
     var g = +st.hapticsGain;
     st.hapticsGain = isFinite(g) ? Math.max(0, Math.min(1, g)) : 0.8;
+    delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
     st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
   };
   G.assistOpts = function () {
@@ -43,7 +44,6 @@
 
   G.init = function (onProgress, onReady) {
     G.mergeSettings();
-    G.canvas = $('game'); G.ctx = G.canvas.getContext('2d', { alpha: false });
     G.canvas3 = $('game3d');
     G.T = PG.buildTrack(PG.MONZA);
     PG.garageTeams = PG.allTeams().slice(0, 10);
@@ -51,6 +51,8 @@
     G.R = new PG.Renderer(G.T);
     if (onProgress) onProgress(0.6);
     G.setup3D();
+    // gra jest tylko w 3D: bez WebGL zostaje ekran z wyjaśnieniem
+    if (!G.use3D) { G.noWebGL = true; if (onProgress) onProgress(1); onReady(); return; }
     G.resize(); window.addEventListener('resize', G.resize);
     G.makeMini();
     G.bindHud();
@@ -81,7 +83,7 @@
     return true;
   }
 
-  // Widok 3D (z awaryjnym powrotem do 2D, gdy WebGL zawiedzie)
+  // Widok 3D (gra wymaga WebGL)
   G.setup3D = function () {
     var st = PG.Store.data.settings, old = G.V;
     G.V = null;
@@ -95,7 +97,7 @@
       try { if (old && old.renderer && old.renderer.forceContextLoss) old.renderer.forceContextLoss(); } catch (e2) { /* nic */ }
     }
     G.use3D = false;
-    if (st.graphics !== '2d' && PG.has3D && PG.has3D()) {
+    if (PG.has3D && PG.has3D()) {
       G.used3 = true;
       try {
         G.V = new PG.View3D(G.canvas3, G.T, G.R, { quality: G.quality(), post: st.post !== false });
@@ -103,16 +105,18 @@
         if (G.S) G.V.setSession(G.S);
         G.use3D = true;
       } catch (e) {
-        console.error('3D niedostępne, przełączam na 2D', e);
+        console.error('3D niedostępne', e);
         if (G.V) { try { G.V.dispose(); } catch (e3) { /* nic */ } }
         G.V = null;
       }
     }
     G.canvas3.hidden = !G.use3D;
-    G.canvas.hidden = G.use3D;
     G.rs = 1;
   };
-  G.reconfigureGraphics = function () { G.setup3D(); G.resize(); };
+  G.reconfigureGraphics = function () {
+    G.setup3D(); G.resize();
+    if (!G.use3D) { G.noWebGL = true; G.paused = true; if (PG.UI && PG.UI.noWebGL) PG.UI.noWebGL(); }
+  };
   // Efekty obrazu: widok od nowa (MSAA płótna jest włączany tylko bez postprocessingu, przy tworzeniu kontekstu)
   G.setPost = function () {
     if (G.use3D) G.reconfigureGraphics();
@@ -127,34 +131,17 @@
 
   G.resize = function () {
     var W = window.innerWidth, H = window.innerHeight;
-    if (G.use3D) {
-      var q = G.V.quality, cap = q === 'high' ? 2 : q === 'medium' ? 1.5 : 1;
-      var d3 = Math.max(0.5, Math.min(window.devicePixelRatio || 1, cap) * (G.rs || 1));
-      G.dpr = d3; G.W = Math.round(W * d3); G.H = Math.round(H * d3);
-      G.V.resize(W, H, d3);
-    } else {
-      var dpr = Math.min(window.devicePixelRatio || 1, 2) * (G.rs || 1);
-      G.dpr = dpr;
-      G.canvas.width = Math.round(W * dpr); G.canvas.height = Math.round(H * dpr);
-      G.W = G.canvas.width; G.H = G.canvas.height;
-    }
+    if (!G.V) return;
+    var q = G.V.quality, cap = q === 'high' ? 2 : q === 'medium' ? 1.5 : 1;
+    var d3 = Math.max(0.5, Math.min(window.devicePixelRatio || 1, cap) * (G.rs || 1));
+    G.dpr = d3; G.W = Math.round(W * d3); G.H = Math.round(H * d3);
+    G.V.resize(W, H, d3);
     G.towerRows = W < 700 ? Math.min(8, Math.floor((H - 300) / 24)) : Math.max(6, Math.min(22, Math.floor((H - 200) / 27)));
     if (G.R) G.makeMini();
   };
 
-  // Tekstury bolidów 2D w pamięci podręcznej per malowanie+kask+opona
-  G.texFor = function (c) {
-    var comp = PG.TYRES[c.compound] ? PG.TYRES[c.compound].color : null;
-    var key = JSON.stringify(c.team.livery) + '|' + JSON.stringify(c.driver.helmet || {}) + '|' + comp;
-    var s = G.sheets.get(key);
-    if (!s) {
-      s = { tex: PG.carTexture(c.team.livery, c.driver.helmet, { compound: comp }), texDrs: PG.carTexture(c.team.livery, c.driver.helmet, { compound: comp, drs: true }) };
-      G.sheets.set(key, s);
-    }
-    c.tex = s.tex; c.texDrs = s.texDrs;
-  };
   // Po zmianie malowań w kreatorze
-  G.clearLiveryCache = function () { G.sheets.clear(); if (PG.Car3D && PG.Car3D.clearCache) PG.Car3D.clearCache(); };
+  G.clearLiveryCache = function () { if (PG.Car3D && PG.Car3D.clearCache) PG.Car3D.clearCache(); };
 
   G.startAttract = function () {
     G.stopHaptics();
@@ -162,11 +149,9 @@
     var entries = [];
     PG.allTeams().slice(0, 10).forEach(function (t) { t.drivers.forEach(function (d) { entries.push({ driver: d, team: t }); }); });
     G.S = PG.createSession({ track: G.T, entries: entries, mode: 'attract', laps: 99, weather: 'sun', difficulty: 'hard', damage: PG.Store.data.settings.damage || 'full' });
-    G.S.cars.forEach(G.texFor);
     if (G.V) { G.V.setSession(G.S); G.V.setMode('tv'); }
     G.mode = 'attract'; G.timeScale = 1; G.paused = false;
     G.attractCar = 0; G.attractT = 0; G.attractCamT = 0; G.attractCamK = 0;
-    var c0 = G.S.cars[0]; G.cam.x = c0.x; G.cam.y = c0.y; G.cam.rot = c0.h + Math.PI / 2;
     $('hud').hidden = true;
   };
 
@@ -180,14 +165,13 @@
       damage: cfg.damage || st.damage || 'full', assists: G.assistOpts(), wearMul: cfg.wearMul || 1, incidents: cfg.incidents || 'rare',
       netClient: !!cfg.netClient
     });
-    G.S.cars.forEach(G.texFor);
     if (G.V) { G.V.setSession(G.S); G.V.setMode(cfg.spectate ? 'tv' : (st.camera || 'chase')); }
     G.mode = cfg.mode; G.spectate = !!cfg.spectate; G.timeScale = cfg.spectate ? 8 : 1; G.paused = false;
     G.net = !!cfg.net; G.netMenu = false;
     G.onDone = onDone; G.endT = 0; G.cfg = cfg;
     G.best = { s: [0, 0, 0], my: [0, 0, 0] }; G.secCols = ['', '', ''];
     G.padUsed = false; G.dmgMsgT = 0;
-    var p = G.S.player; G.cam.x = p.x; G.cam.y = p.y; G.cam.rot = p.h + Math.PI / 2; G.cam.z = 1;
+    var p = G.S.player;
     $('hud').hidden = false; G.makeMini();
     $('lights').hidden = cfg.mode !== 'race';
     G.setLights(0);
@@ -365,17 +349,13 @@
 
   G.cycleCamera = function (dir) {
     var st = PG.Store.data.settings;
-    if (G.use3D) {
-      var list = PG.CAMERAS, i = 0;
-      for (var k = 0; k < list.length; k++) if (list[k].id === G.V.cam.mode) i = k;
-      i = (i + dir + list.length) % list.length;
-      G.V.setMode(list[i].id);
-      if (!G.spectate) { st.camera = list[i].id; PG.Store.save(); }
-      G.msg('', 'Kamera: ' + list[i].name, '', 1.4);
-    } else {
-      st.camRotate = st.camRotate === false; PG.Store.save();
-      G.msg('', st.camRotate ? 'Kamera obraca się z torem' : 'Kamera stała, północ w górze', '', 1.4);
-    }
+    if (!G.V) return;
+    var list = PG.CAMERAS, i = 0;
+    for (var k = 0; k < list.length; k++) if (list[k].id === G.V.cam.mode) i = k;
+    i = (i + dir + list.length) % list.length;
+    G.V.setMode(list[i].id);
+    if (!G.spectate) { st.camera = list[i].id; PG.Store.save(); }
+    G.msg('', 'Kamera: ' + list[i].name, '', 1.4);
   };
 
 
@@ -445,15 +425,13 @@
         PG.updateSession(S, dt, input);
         G.handleEvents(S.events, active);
       }
-      if (!G.use3D) G.R.carEffects(S, dt * G.timeScale);
       if (active) G.checkEnd(dt);
       if (G.msgT > 0) { G.msgT -= dt; if (G.msgT <= 0) G.msg('', ''); }
     }
     if (G.net && PG.Multi) { try { PG.Multi.post(S, dt); } catch (e) { console.warn('Multiplayer (po kroku):', e); } }
     G.hapticsFrame(S, dt);
     var line = (active && !G.spectate && S.state !== 'lights') ? G.lineMode() : 'off';
-    if (G.use3D) G.draw3D(S, dt, active, line);
-    else G.draw2D(S, dt, active, line);
+    if (G.V) G.draw3D(S, dt, active, line);
     if (active && G.mode !== 'post') {
       G.hudT -= dt;
       G.updateHud(G.hudT <= 0);
@@ -478,29 +456,6 @@
     G.V.render(S, G.paused ? 0 : dt * Math.min(G.timeScale, 1), {
       focus: focus, lookBack: look, line: line, marker: active, lights: lights
     });
-  };
-
-  // Widok 2D z góry: obraca się z torem, oddala z prędkością
-  G.draw2D = function (S, dt, active, line) {
-    var focus = G.camTarget(dt), cam = G.cam, st = PG.Store.data.settings;
-    var rotate = st.camRotate !== false;
-    if (focus) {
-      var f = Math.min(1, dt * 6);
-      cam.x += (focus.x - cam.x) * f; cam.y += (focus.y - cam.y) * f;
-      if (Math.hypot(focus.x - cam.x, focus.y - cam.y) > 200) { cam.x = focus.x; cam.y = focus.y; cam.rot = focus.h + Math.PI / 2; }
-      var T = G.T, ia = PG.wrapI((focus.idx || 0) + Math.round(18 / T.ds), T.N), ib = PG.wrapI((focus.idx || 0) - Math.round(6 / T.ds), T.N);
-      var th = Math.atan2(T.y[ia] - T.y[ib], T.x[ia] - T.x[ib]);
-      var tr = rotate ? th + Math.PI / 2 : 0;
-      var dr = Math.atan2(Math.sin(tr - (cam.rot || 0)), Math.cos(tr - (cam.rot || 0)));
-      cam.rot = (cam.rot || 0) + dr * Math.min(1, dt * 3);
-      var zt = 1 - Math.min(1, Math.abs(focus.v) / 90) * 0.4;
-      cam.z = (cam.z || 1) + (zt - (cam.z || 1)) * Math.min(1, dt * 1.5);
-    }
-    var W = G.W, H = G.H, small = Math.min(W, H) / G.dpr < 600;
-    var ppm = Math.sqrt(W * H) / (small ? 78 : 92) * (cam.z || 1);
-    var vcam = { x: cam.x, y: cam.y, rot: cam.rot || 0, ppm: ppm, cx: W / 2, cy: H * (rotate ? 0.64 : 0.5) };
-    if (G.shake > 0) { vcam.x += (Math.random() - 0.5) * G.shake; vcam.y += (Math.random() - 0.5) * G.shake; G.shake = Math.max(0, G.shake - dt * 8); }
-    G.R.draw(G.ctx, W, H, S, vcam, { marker: active, line: line, dt: dt });
   };
 
   G.camTarget = function (dt) {
@@ -563,8 +518,8 @@
           break;
         case 'drs': if (e.car === p && A.drs) A.drs(true); break;
         case 'drsclose': if (e.car === p && A.drs) A.drs(false); break;
-        case 'wall': if (e.car === p) { G.shake = Math.min(6, e.force * 0.3); A.thump(e.force); if (V) V.shake(Math.min(8, e.force * 0.4)); } break;
-        case 'hit': if (e.player) { G.shake = Math.min(4, e.force * 0.4); A.thump(e.force * 0.6); if (V) V.shake(Math.min(6, e.force * 0.5)); } break;
+        case 'wall': if (e.car === p) { A.thump(e.force); if (V) V.shake(Math.min(8, e.force * 0.4)); } break;
+        case 'hit': if (e.player) { A.thump(e.force * 0.6); if (V) V.shake(Math.min(6, e.force * 0.5)); } break;
         case 'damage':
           if (e.car === p) {
             if (A.crunch) A.crunch(e.force, fin(e.level, 0) - fin(e.prev, 0));
@@ -597,7 +552,6 @@
         case 'qualidone': G.stopHaptics(); G.msg('CZAS OKRĄŻENIA', PG.fmtTime(e.t), 'purple', 4); break;
         case 'pitin': if (e.car === p) G.msg('ALEJA SERWISOWA', 'Ogranicznik 80 km/h przy garażach', '', 2.2); break;
         case 'pitdone':
-          G.texFor(e.car);
           if (e.car === p) G.msg('PIT STOP ' + e.t.toFixed(1).replace('.', ',') + ' s', 'Opony: ' + (PG.TYRES[e.comp] || PG.TYRES.M).name + (e.fixed ? ' · nowe skrzydło' : ''), '', 2.6);
           break;
         case 'pitout': if (e.car === p) G.msg('', 'Wyjazd z alei — wracasz do wyścigu', '', 1.6); break;

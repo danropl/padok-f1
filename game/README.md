@@ -1,12 +1,12 @@
 # Monza Grand Prix
 
-Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, widok 3D (three.js) i z góry, kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
+Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
 ## Uruchomienie
 
-Otwórz `index.html` w przeglądarce albo uruchom dowolny serwer statyczny w tym katalogu:
+Gra działa wyłącznie w 3D i wymaga przeglądarki z WebGL (aktualny Chrome, Edge, Firefox lub Safari z włączonym przyspieszeniem sprzętowym). Otwórz `index.html` w przeglądarce albo uruchom dowolny serwer statyczny w tym katalogu:
 
 ```bash
 cd game
@@ -71,7 +71,8 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/racecontrol.js` | samochód bezpieczeństwa, VSC, awarie |
 | `js/net.js`, `js/multi.js` | multiplayer: lobby, WebRTC, synchronizacja wyścigu |
 | `js/career.js` | zapis gry, zespoły własne, tryb kariery |
-| `js/render.js`, `js/sprites.js` | widok z góry (canvas 2D) |
+| `js/render.js` | rozmieszczenie trybun, boksów, drzew i reklam dla sceny 3D, linia jazdy, minimapa |
+| `js/sprites.js` | ikony bolidów, kasków i flag w menu i kreatorze |
 | `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, drzewa, trawa, kamery, postprocessing |
 | `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, dłonie) |
 | `js/audio.js` | dźwięk silnika i efekty (Web Audio) |

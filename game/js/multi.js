@@ -66,7 +66,7 @@
     c.drsOpen = !!(f & 1); c.inPit = !!(f & 2); c.pitReq = !!(f & 32);
     if ((f & 4) && !c.retired) { c.retired = true; c.v = 0; }
     c.lap = a[11];
-    if (PG.TYRES[a[13]] && c.compound !== a[13]) { c.compound = a[13]; try { G.texFor(c); } catch (e) { /* nic */ } }
+    if (PG.TYRES[a[13]]) c.compound = a[13];
     c.wear = a[14]; c.lastLap = a[15]; c.bestLap = a[16]; c.penalty = a[18];
     var P = PG.DMG_PARTS, dm = String(a[19] || '');
     if (c.dmg) for (var k = 0; k < P.length; k++) c.dmg[P[k]] = (+dm.charAt(k) || 0) / 9;

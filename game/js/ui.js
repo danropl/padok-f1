@@ -118,12 +118,23 @@
     s.appendChild(h('div', { style: 'min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px' },
       h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'MONZA' }), h('span', { class: 'k2', text: 'GRAND PRIX' }), h('span', { class: 's', text: 'AUTODROMO NAZIONALE' })),
       bar1, h('p', { class: 'muted', text: 'Wczytywanie toru i bolidów…' })));
-    G.init(function (p) { bar1.firstChild.style.width = Math.round(p * 100) + '%'; }, function () { UI.menu(); });
+    G.init(function (p) { bar1.firstChild.style.width = Math.round(p * 100) + '%'; }, function () { if (G.noWebGL) UI.noWebGL(); else UI.menu(); });
     document.addEventListener('pointerdown', function () { PG.Audio.init(); }, { once: true });
+  };
+
+  // Gra działa tylko w 3D: bez WebGL zamiast menu jest wyjaśnienie
+  UI.noWebGL = function () {
+    var s = screen('nowebgl', 'solid');
+    s.appendChild(h('div', { style: 'min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center' },
+      h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'MONZA' }), h('span', { class: 'k2', text: 'GRAND PRIX' })),
+      h('h2', { text: 'Gra wymaga grafiki 3D (WebGL)' }),
+      h('p', { class: 'muted', style: 'max-width:560px', text: 'Ta przeglądarka nie udostępnia WebGL albo jest on wyłączony. Otwórz grę w aktualnym Chrome, Edge, Firefox lub Safari i sprawdź, czy przyspieszenie sprzętowe jest włączone (Chrome: Ustawienia → System → „Używaj akceleracji grafiki”).' }),
+      h('button', { type: 'button', class: 'primary', text: 'Spróbuj ponownie', onclick: function () { location.reload(); } })));
   };
 
   // ---------- MENU ----------
   UI.menu = function () {
+    if (G.noWebGL || !G.V) { UI.noWebGL(); return; }
     if (G.mode !== 'attract') G.startAttract();
     if (UI.multiAuto && UI.multiAuto()) return; // link z kodem lobby
     var s = screen('menu', 'dim');
@@ -209,11 +220,6 @@
 
     // grafika
     var gp = h('div', { class: 'panel col' }, h('h3', { text: 'Grafika' }));
-    var can3d = PG.has3D && PG.has3D();
-    gp.appendChild(h('div', { class: 'field' }, 'Widok', seg([['3d', 'Pełne 3D'], ['2d', 'Z góry (2D)']], st.graphics === '2d' ? '2d' : '3d', function (v) {
-      st.graphics = v; Store.save(); G.reconfigureGraphics(); UI.clearSnapshots();
-      if (v === '3d' && !G.use3D) UI.toast('Ta przeglądarka nie obsługuje WebGL — zostaje widok 2D');
-    })));
     gp.appendChild(h('div', { class: 'field' }, 'Jakość 3D', seg([['auto', 'Automatyczna'], ['high', 'Wysoka'], ['medium', 'Średnia'], ['low', 'Niska']], st.quality || 'auto', function (v) {
       st.quality = v; Store.save(); if (G.use3D) G.reconfigureGraphics();
     })));
@@ -224,8 +230,6 @@
     var camSel = h('select', { id: 'camDefault', onchange: function () { st.camera = camSel.value; Store.save(); if (G.V && G.mode !== 'attract') G.V.setMode(st.camera); } });
     (PG.CAMERAS || []).forEach(function (c) { camSel.appendChild(h('option', { value: c.id, text: c.name, selected: (st.camera || 'chase') === c.id })); });
     gp.appendChild(h('label', { class: 'field' }, 'Kamera w wyścigu (zmiana w trakcie: C lub △)', camSel));
-    gp.appendChild(h('div', { class: 'field' }, 'Kamera widoku 2D', seg([[true, 'Obraca się z torem'], [false, 'Stała, północ w górze']], st.camRotate !== false, function (v) { st.camRotate = v; Store.save(); })));
-    if (!can3d) gp.appendChild(note('Ta przeglądarka nie udostępnia WebGL, dlatego gra działa w widoku 2D.'));
     g2.appendChild(gp);
 
     // jazda: linia, asysty, uszkodzenia

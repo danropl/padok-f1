@@ -1,4 +1,4 @@
-// Monza Grand Prix — grafika wektorowa w wysokiej rozdzielczości: bolid F1 z malowaniem, kask, flagi.
+// Monza Grand Prix — grafika wektorowa do menu i kreatora: bolid F1 z malowaniem (też warstwy malowania modelu 3D), kask, flagi.
 (function (PG) {
   'use strict';
 
@@ -195,18 +195,6 @@
     PG.drawCarShape(g, lv, helmet, opts);
     return c;
   };
-  // Cień: rozmyta sylwetka
-  PG.carShadow = function () {
-    if (PG._shadow) return PG._shadow;
-    var c = document.createElement('canvas'); c.width = 6.6 * 20; c.height = 2.9 * 20;
-    var g = c.getContext('2d'); g.translate(c.width / 2, c.height / 2); g.scale(20, 20);
-    g.filter = 'blur(4px)';
-    g.fillStyle = 'rgba(0,0,0,0.55)'; g.beginPath(); roundRect(g, -2.85, -1.0, 5.6, 2.0, 0.5); g.fill();
-    PG._shadow = c; return c;
-  };
-
-  PG.carCanvas = function (lv, helmet, scale) { return PG.carTexture(lv, helmet, { compound: null }); };
-
   // Maska pól siatki, które leżą na nadwoziu lub skrzydłach (do edytora malowania)
   PG.paintMask = function () {
     if (PG._pmask) return PG._pmask;
