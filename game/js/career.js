@@ -8,6 +8,34 @@
   function uid(p) { return (p || 'id') + '_' + Math.random().toString(36).slice(2, 9); }
   PG.uid = uid;
 
+  // Zapis w ciasteczkach przeglądarki: JSON dzielony na kawałki po ~3,8 KB (limit jednego ciasteczka to 4 KB);
+  // najwyżej ~38 KB, bo ciasteczka idą z każdym zapytaniem do serwera gry (większy zapis zostaje tylko w localStorage)
+  var CK = 'wgp', CHUNK = 3800, MAXN = 10, CK_LIFE = 60 * 60 * 24 * 3650;
+  function cookieGet(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? m[1] : null;
+  }
+  function cookieSet(name, val, life) { document.cookie = name + '=' + val + '; max-age=' + life + '; path=/; SameSite=Lax'; }
+  function cookieRead() {
+    if (typeof document === 'undefined') return null;
+    var n = +cookieGet(CK + 'n'); if (!(n > 0)) return null;
+    var out = '';
+    for (var i = 0; i < n; i++) { var part = cookieGet(CK + i); if (part === null) return null; out += part; }
+    return decodeURIComponent(out);
+  }
+  function cookieWrite(json) {
+    if (typeof document === 'undefined') return false;
+    var enc = encodeURIComponent(json), n = Math.ceil(enc.length / CHUNK);
+    if (n > MAXN) return false;
+    var old = +cookieGet(CK + 'n') || 0;
+    for (var i = 0; i < n; i++) {
+      cookieSet(CK + i, enc.slice(i * CHUNK, (i + 1) * CHUNK), CK_LIFE);
+    }
+    for (var j = n; j < old; j++) cookieSet(CK + j, '', 0);
+    cookieSet(CK + 'n', String(n), CK_LIFE);
+    return cookieGet(CK + 'n') === String(n);
+  }
+
   var Store = PG.Store = {
     data: null,
     defaults: function () {
@@ -18,8 +46,11 @@
       };
     },
     load: function () {
-      var d = null;
+      var d = null, c = null;
       try { var raw = localStorage.getItem(KEY); if (raw) d = JSON.parse(raw); } catch (e) { d = null; }
+      try { var rc = cookieRead(); if (rc) c = JSON.parse(rc); } catch (e2) { c = null; }
+      // nowszy z dwóch zapisów (ciasteczka są wspólne dla wszystkich portów localhost, localStorage — nie)
+      if (c && (!d || (c._t || 0) > (d._t || 0))) d = c;
       var def = Store.defaults();
       if (!d || d.version !== 1) d = def;
       Object.keys(def).forEach(function (k) { if (d[k] === undefined) d[k] = def[k]; });
@@ -28,7 +59,11 @@
       return d;
     },
     save: function () {
-      try { localStorage.setItem(KEY, JSON.stringify(Store.data)); return true; } catch (e) { return false; }
+      Store.data._t = Date.now();
+      var json = JSON.stringify(Store.data), ok = false;
+      try { localStorage.setItem(KEY, json); ok = true; } catch (e) { /* nic */ }
+      try { if (cookieWrite(json)) ok = true; } catch (e2) { /* nic */ }
+      return ok;
     },
     reset: function () { Store.data = Store.defaults(); Store.save(); }
   };
