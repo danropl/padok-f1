@@ -272,8 +272,9 @@
     if (!(sev > 3)) return; // lekkie dotknięcie bez skutków
     var s = (sev - 3) / 12;
     if (!ht.a.isPlayer && !ht.b.isPlayer) s *= 0.6; // AI między sobą ostrożniejsze
-    partHit(ht.a, ht.nx, ht.ny, ht.ia, s, sev, ht.x, ht.y);
-    partHit(ht.b, -ht.nx, -ht.ny, ht.ib, s, sev, ht.x, ht.y);
+    // bolidy z sieci uszkadza tylko ich właściciel
+    if (!ht.a.remote) partHit(ht.a, ht.nx, ht.ny, ht.ia, s, sev, ht.x, ht.y);
+    if (!ht.b.remote) partHit(ht.b, -ht.nx, -ht.ny, ht.ib, s, sev, ht.x, ht.y);
   }
 
   function partHit(c, nx, ny, circ, s, f, x, y) {
@@ -324,7 +325,7 @@
         }
         c.dmgTotal = dmgTotal(d);
         // rozbity bolid AI zjeżdża i odpada z wyścigu; lżej uszkodzony jedzie do boksu
-        if (full && !c.isPlayer && !c.remote && PG.RC && !S.netClient && S.mode === 'race' &&
+        if (full && !c.isPlayer && !c.remote && !c.finished && PG.RC && !S.netClient && S.mode === 'race' &&
           (c.dmgTotal > 0.6 || d.engine >= 1 || (d.suspFL >= 1 && d.suspFR >= 1))) PG.RC.retire(S, c, 'crash');
         else if (PG.Pit && c.ai && !c.isPlayer && !c.remote) PG.Pit.aiPlan(c, S);
         if (full && PG.dmgPerf) {
@@ -345,7 +346,14 @@
     var T = S.T, Lt = T.length, sb = [S.T.sectors[0] * T.ds, S.T.sectors[1] * T.ds];
     for (var i = 0; i < S.cars.length; i++) {
       var c = S.cars[i];
-      if (c.remote || c.retired) continue; // czasy innych graczy przychodzą z sieci
+      if (c.remote) { // czasy innych graczy przychodzą z sieci; tu tylko najszybsze okrążenie
+        if (c.lap !== c.fLap) {
+          if (S.mode === 'race' && c.fLap !== undefined && c.lap >= 2 && c.lastLap > 0 && (!S.fastest.time || c.lastLap < S.fastest.time)) S.fastest = { time: c.lastLap, car: c };
+          c.fLap = c.lap;
+        }
+        continue;
+      }
+      if (c.retired) continue;
       // znaczniki czasu
       if (c.dist >= 0) {
         var m = Math.floor(c.dist / MK);
@@ -367,9 +375,11 @@
         // pierwsze okrążenie w wyścigu liczone od startu z pola
         c.lastLap = lt; c.lapStart = S.time;
         c.lastSectors = c.sectorTimes.slice();
-        var isBest = !c.bestLap || lt < c.bestLap;
+        // okrążenie po przejęciu bolidu przez AI (multiplayer) nie liczy się do rekordów
+        var noBest = !!c.noBest; c.noBest = false;
+        var isBest = !noBest && (!c.bestLap || lt < c.bestLap);
         if (isBest) { c.bestLap = lt; c.bestSectors = c.sectorTimes.slice(); }
-        if (S.mode === 'race' && c.lap >= 1 && (!S.fastest.time || lt < S.fastest.time)) { S.fastest = { time: lt, car: c }; S.events.push({ type: 'fastest', car: c, t: lt }); }
+        if (S.mode === 'race' && !noBest && c.lap >= 1 && (!S.fastest.time || lt < S.fastest.time)) { S.fastest = { time: lt, car: c }; S.events.push({ type: 'fastest', car: c, t: lt }); }
         c.lap = lapsDone;
         S.events.push({ type: 'lap', car: c, t: lt, best: isBest });
         if (PG.Pit) {
@@ -451,12 +461,23 @@
     arr = S.cars.slice();
     arr.sort(function (a, b) {
       if (!!a.retired !== !!b.retired) return a.retired ? 1 : -1; // wycofani na końcu
-      if (a.finished && b.finished && S.mode === 'race') return S.finishOrder.indexOf(a) - S.finishOrder.indexOf(b);
-      if (a.finished !== b.finished && S.mode === 'race') return a.finished ? -1 : 1;
+      if (S.mode === 'race' && (a.finished || b.finished)) {
+        // najpierw liczba okrążeń (zdublowany na mecie nie wyprzedza bolidów z okrążenia lidera)
+        var la = a.finished ? finLaps(a) : a.lap + 1, lb = b.finished ? finLaps(b) : b.lap + 1;
+        if (la !== lb) return lb - la;
+        if (a.finished && b.finished) return S.finishOrder.indexOf(a) - S.finishOrder.indexOf(b);
+        if (a.finished !== b.finished) return a.finished ? -1 : 1;
+      }
       return b.dist - a.dist;
     });
     for (var i = 0; i < arr.length; i++) arr[i].pos = i + 1;
     S.order = arr;
+  }
+
+  // Okrążenia na mecie (bolid z sieci: licznik z chwili flagi)
+  function finLaps(c) {
+    if (c.finishLaps === undefined) c.finishLaps = Math.max(0, c.lap);
+    return c.finishLaps;
   }
 
   // Klasyfikacja końcowa (dokończa wyścig szacunkowo dla tych, którzy nie dojechali)
@@ -464,18 +485,19 @@
     var Lt = S.T.length, res = [];
     var leader = S.finishOrder[0];
     S.cars.forEach(function (c) {
-      var total;
-      if (c.retired || c.retiring) { res.push({ car: c, time: 1e7 + (S.laps * Lt - c.dist), laps: Math.max(0, c.lap), best: c.bestLap, penalty: c.penalty, dnf: true }); return; }
-      if (c.finished) total = c.finishTime;
+      var total, laps;
+      if ((c.retired || c.retiring) && !c.finished) { res.push({ car: c, time: 1e7 + (S.laps * Lt - c.dist), laps: Math.max(0, c.lap), best: c.bestLap, penalty: c.penalty, dnf: true }); return; }
+      if (c.finished) { total = c.finishTime; laps = finLaps(c); }
       else {
-        var targetLaps = S.laps;
-        var remaining = targetLaps * Lt - c.dist;
+        // po fladze lidera każdy kończy na najbliższym przejeździe przez metę
+        laps = S.leaderDone ? Math.min(S.laps, Math.max(0, c.lap) + 1) : S.laps;
+        var remaining = laps * Lt - c.dist;
         var pace = c.bestLap || (S.time / Math.max(0.3, c.dist / Lt));
         total = S.time + Math.max(0, remaining) / Lt * pace * 1.01;
       }
-      res.push({ car: c, time: total + c.penalty, laps: S.laps, best: c.bestLap, penalty: c.penalty });
+      res.push({ car: c, time: total + c.penalty, laps: laps, best: c.bestLap, penalty: c.penalty });
     });
-    res.sort(function (a, b) { return a.time - b.time; });
+    res.sort(function (a, b) { return (!!a.dnf - !!b.dnf) || (b.laps - a.laps) || (a.time - b.time); });
     res.forEach(function (r, i) { r.pos = i + 1; r.gap = i === 0 ? 0 : r.time - res[0].time; });
     return res;
   };

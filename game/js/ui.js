@@ -322,7 +322,14 @@
     dp.appendChild(h('label', { class: 'field' }, 'Głośność', vol));
     dp.appendChild(h('h3', { text: 'Zapis gry', style: 'margin-top:6px' }));
     var del = h('button', { type: 'button', class: 'danger', text: 'Usuń zapis gry' });
-    del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () { Store.reset(); if (G.mergeSettings) G.mergeSettings(); Store.save(); UI.toast('Zapis usunięty'); UI.settings(); }); };
+    del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () {
+      var oq = G.quality(), op = !!Store.data.settings.post;
+      Store.reset(); if (G.mergeSettings) G.mergeSettings(); Store.save();
+      var ns = Store.data.settings; PG.Audio.setVol(ns.vol); PG.Audio.setOn(ns.sound);
+      if (G.use3D && (G.quality() !== oq || !!ns.post !== op)) G.reconfigureGraphics();
+      quick.teamId = null; quick.driverIdx = 0;
+      UI.toast('Zapis usunięty'); UI.settings();
+    }); };
     dp.appendChild(h('div', { class: 'row' }, del));
     g2.appendChild(dp);
 
@@ -341,6 +348,7 @@
   UI.quick = function () {
     var s = screen('quick', 'dim'), teams = PG.allTeams(), st = Store.data.settings;
     if (!quick.teamId || !teams.find(function (t) { return t.id === quick.teamId; })) quick.teamId = teams[0].id;
+    if (typeof quick.driverIdx === 'string' && !Store.data.drivers[+quick.driverIdx.slice(1)]) quick.driverIdx = 0;
     quick.laps = st.laps; quick.diff = st.difficulty;
     quick.qf = st.qualiFormat || 'q3'; quick.wear = st.wear || 'auto'; quick.inc = st.incidents || 'rare';
     var w = h('div', { class: 'wrap' });
@@ -405,8 +413,6 @@
   function qEnv(ctx) { return { wet: ctx.weather === 'rain', weatherGrip: PG.WEATHER[ctx.weather].grip }; }
   var Q_TXT = {
     one: 'Jedno szybkie okrążenie ustala pole startowe. Startujesz rozpędzony przed Parabolicą.',
-    0: 'Q1: cała stawka. Pięciu najwolniejszych odpada i startuje z końca.',
-    1: 'Q2: piętnastu najszybszych z Q1. Kolejnych pięciu odpada.',
     2: 'Q3: dziesiątka walczy o pole position.'
   };
   UI.weekend = function (ctx) {
@@ -426,10 +432,11 @@
     p.appendChild(h('div', { class: 'kv' }, h('span', { text: 'Tor' }), h('span', { text: PG.MONZA.name }), h('span', { text: 'Pogoda' }), h('span', { text: W.name }),
       h('span', { text: 'Wyścig' }), h('span', { text: raceLen(ctx.laps) }), h('span', { text: 'Rywale' }), h('span', { text: PG.DIFF_NAMES[ctx.difficulty] }),
       h('span', { text: 'W segmencie' }), h('span', { text: st.alive.length + ' bolidów' + (keep ? ' · awansuje ' + keep : '') })));
-    p.appendChild(h('p', { text: st.format === 'one' ? Q_TXT.one : Q_TXT[seg] }));
+    p.appendChild(h('p', { text: st.format === 'one' ? Q_TXT.one : seg === 0 ? 'Q1: cała stawka. Odpada ' + (st.alive.length - keep) + ' najwolniejszych i startuje z końca.' :
+      seg === 1 ? 'Q2: ' + st.alive.length + ' najszybszych z Q1. Kolejnych ' + (st.alive.length - keep) + ' odpada.' : Q_TXT[seg] }));
     function isHuman(e) { return !!e.isPlayer; }
     function finish(times) { var res = Q.complete(st, times); UI.qualiRes(ctx, res); }
-    function simMe(times) { times[meIdx] = Q.simTime(G.T, me, env, 'normal', seg); return times; }
+    function simMe(times) { times[meIdx] = Q.simTime(G.T, me, env, 'normal', st.seg); return times; }
     var row = h('div', { class: 'row' });
     if (alive) {
       row.appendChild(h('button', { type: 'button', class: 'primary', text: 'Jedź okrążenie', onclick: function () {
@@ -555,7 +562,7 @@
     var s = screen('results', 'dim');
     var w = h('div', { class: 'wrap', style: 'max-width:1000px' });
     var g2 = h('div', { class: 'grid2' });
-    var fl = null; res.forEach(function (r) { if (r.best && (!fl || r.best < fl.best)) fl = r; });
+    var fl = null; res.forEach(function (r) { if (!r.dnf && r.best && (!fl || r.best < fl.best)) fl = r; });
     var tbl = h('table', { class: 'tbl' }, h('tr', {}, h('th', { text: 'Poz' }), h('th', { text: 'Kierowca' }), h('th', { class: 'num', text: 'Czas' }), h('th', { class: 'num', text: 'Najl.' }), h('th', { class: 'num', text: 'Pkt' })));
     res.forEach(function (r) {
       var pts = r.dnf ? 0 : (PG.POINTS[r.pos - 1] || 0) + (fl === r && r.pos <= 10 ? 1 : 0);
@@ -567,8 +574,10 @@
     });
     g2.appendChild(h('div', { class: 'panel col' }, h('h3', { text: 'Klasyfikacja wyścigu' }), h('div', { class: 'tblwrap' }, tbl)));
     var side = h('div', { class: 'panel col' });
-    var verdict = mine.pos === 1 ? 'Zwycięstwo na Monzy!' : mine.pos <= 3 ? 'Podium!' : mine.pos <= 10 ? 'Punkty!' : 'Bez punktów';
-    side.appendChild(h('div', { class: 'row' }, h('span', { class: 'big-pos', text: 'P' + mine.pos }), h('div', { class: 'col', style: 'gap:2px' }, h('b', { text: verdict }), h('span', { class: 'muted', text: 'Start z P' + grid + ' · najlepsze okr. ' + PG.fmtTime(mine.best) }))));
+    if (mine) { // widz online: bez własnego wyniku
+      var verdict = mine.pos === 1 ? 'Zwycięstwo na Monzy!' : mine.pos <= 3 ? 'Podium!' : mine.pos <= 10 ? 'Punkty!' : 'Bez punktów';
+      side.appendChild(h('div', { class: 'row' }, h('span', { class: 'big-pos', text: 'P' + mine.pos }), h('div', { class: 'col', style: 'gap:2px' }, h('b', { text: verdict }), h('span', { class: 'muted', text: 'Start z P' + grid + ' · najlepsze okr. ' + PG.fmtTime(mine.best) }))));
+    }
     if (ctx.mp) {
       side.appendChild(h('div', { class: 'row' },
         h('button', { type: 'button', class: 'primary', text: 'Wróć do lobby', onclick: function () { if (PG.Multi) PG.Multi.backToLobby(); else UI.menu(); } }),
@@ -610,7 +619,7 @@
       h('button', { type: 'button', text: 'Zmień kamerę (C)', onclick: function () { G.togglePause(); G.cycleCamera(1); } }),
       h('button', { type: 'button', text: S.mode === 'race' ? 'Dokończ symulacją' : 'Pomiń (czas symulowany)', onclick: function () { UI.hidePause(); G.simulateRest(); } }),
       h('button', { type: 'button', text: 'Powrót na tor (R)', onclick: function () { G.togglePause(); G.resetPlayer(); } }));
-    if (!(G.cfg && G.cfg.careerRace)) p.appendChild(h('button', { type: 'button', class: 'danger', text: 'Wyjdź do menu', onclick: function () { UI.hidePause(); G.paused = false; G.onDone = null; G.startAttract(); UI.menu(); } }));
+    if (!(G.cfg && G.cfg.careerRace)) p.appendChild(h('button', { type: 'button', class: 'danger', text: 'Wyjdź do menu', onclick: function () { UI.hidePause(); G.paused = false; G.onDone = null; if (PG.Multi && PG.Multi.room) PG.Multi.leave(); G.startAttract(); UI.menu(); } }));
     // asysty i podpowiedzi zmieniane w trakcie sesji
     var opt = h('div', { class: 'col', style: 'gap:8px;margin-top:8px' }, h('h3', { text: 'Asysty i podpowiedzi' }),
       h('div', { class: 'field' }, 'Automatyczny DRS', assistSeg('autoDrs')),
@@ -989,7 +998,7 @@
           var t = C.team(car, of.teamId);
           o.appendChild(h('div', { class: 'card', style: 'cursor:default' }, teamStripe(t), h('div', { class: 'row', style: 'justify-content:space-between' }, h('b', { text: t.name }), carImg(t.livery, null, 2)),
             h('span', { class: 'muted', style: 'font-size:13px', text: 'Osiągi bolidu ' + Math.round(PG.teamRating(t)) + ' · pensja ' + money(of.salary) + ' za rundę' }),
-            h('button', { type: 'button', class: 'primary small', text: 'Podpisz kontrakt', onclick: function () { C.nextSeason(car, of.teamId); UI.toast('Witamy w ' + t.name + '!'); UI.hub(); } })));
+            h('button', { type: 'button', class: 'primary small', text: 'Podpisz kontrakt', onclick: function () { C.nextSeason(car, of.teamId, of.salary); UI.toast('Witamy w ' + t.name + '!'); UI.hub(); } })));
         });
         o.appendChild(h('button', { type: 'button', text: 'Zostań w ' + C.team(car).name, onclick: function () { C.nextSeason(car, null); UI.hub(); } }));
       } else {

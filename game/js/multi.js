@@ -52,8 +52,9 @@
   // ---------- pakowanie stanu bolidu ----------
   function pack(c) {
     var d = c.dmg || {}, dm = '', P = PG.DMG_PARTS;
-    for (var k = 0; k < P.length; k++) dm += Math.min(9, Math.round(num(d[P[k]], 0) * 9));
-    var f = (c.drsOpen ? 1 : 0) | (c.inPit ? 2 : 0) | (c.retired || c.retiring ? 4 : 0) | (c.finished ? 8 : 0) | (c.pit && c.pit.ph === 'stop' ? 16 : 0) | (c.pitReq ? 32 : 0);
+    // 9 tylko dla oderwanej części
+    for (var k = 0; k < P.length; k++) { var v = num(d[P[k]], 0); dm += v >= 0.999 ? 9 : Math.min(8, Math.round(v * 9)); }
+    var f = (c.drsOpen ? 1 : 0) | (c.inPit ? 2 : 0) | (c.retired || c.retiring ? 4 : 0) | (c.finished ? 8 : 0) | (c.pit && c.pit.ph === 'stop' ? 16 : 0) | (c.pitReq ? 32 : 0) | (c.ghost > 0 ? 64 : 0);
     return [c.ei, r2(c.x), r2(c.y), r3(c.h), r2(c.v), r2(c.steer || 0), r2(c.throttle || 0), r2(c.brake || 0), c.gear | 0, Math.round(c.rpm || 0), f,
       c.lap | 0, r1(c.dist), c.compound, r3(c.wear || 0), r3(c.lastLap || 0), r3(c.bestLap || 0), r3(c.finishTime || 0), c.penalty || 0, dm,
       r2(c.lock || 0), r2(c.skid || 0), Math.max(0, SURF.indexOf(c.surface))];
@@ -63,16 +64,16 @@
     if (!a || !c) return;
     c.gear = a[8]; c.rpm = a[9];
     var f = a[10];
-    c.drsOpen = !!(f & 1); c.inPit = !!(f & 2); c.pitReq = !!(f & 32);
+    c.drsOpen = !!(f & 1); c.inPit = !!(f & 2); c.pitReq = !!(f & 32); c.ghost = (f & 64) ? 1 : 0;
     if ((f & 4) && !c.retired) { c.retired = true; c.v = 0; }
     c.lap = a[11];
-    if (PG.TYRES[a[13]]) c.compound = a[13];
+    if (PG.TYRES[a[13]]) { c.compound = a[13]; (c.compounds || (c.compounds = {}))[a[13]] = true; }
     c.wear = a[14]; c.lastLap = a[15]; c.bestLap = a[16]; c.penalty = a[18];
     var P = PG.DMG_PARTS, dm = String(a[19] || '');
     if (c.dmg) for (var k = 0; k < P.length; k++) c.dmg[P[k]] = (+dm.charAt(k) || 0) / 9;
     c.lock = a[20]; c.skid = a[21]; c.surface = SURF[a[22]] || 'asphalt';
     if ((f & 8) && !c.finished) {
-      c.finished = true; c.finishTime = a[17];
+      c.finished = true; c.finishTime = (M.isHost && S) ? S.time : a[17]; // u hosta — jego zegar
       if (M.isHost && S) {
         if (S.finishOrder.indexOf(c) < 0) S.finishOrder.push(c);
         if (!S.leaderDone) { S.leaderDone = true; S.state = 'finish'; }
@@ -122,7 +123,8 @@
   M.reset = function () {
     if (M.room) { try { M.room.close(); } catch (e) { /* nic */ } }
     if (M.dir && M.isHost) { try { M.dir.advertise({}); } catch (e2) { /* nic */ } }
-    clearTimeout(M.qTimer); clearTimeout(M.gTimer); clearTimeout(M.advTimer);
+    clearTimeout(M.qTimer); clearTimeout(M.gTimer); clearTimeout(M.advTimer); clearTimeout(M.qAdvTimer); clearInterval(M.helloTimer); M.helloTimer = null;
+    M.fwd = {}; M.denyAt = {};
     M.room = null; M.L = null; M.entries = null; M.isHost = false; M.myEi = -1; M.buf = {}; M.phase = 'none'; M.snap = null; M.evq = [];
     M.q = null; M.qt = null; M.comps = null; M.loaded = null; M.seen = {}; M.missing = {}; M.lastSnap = 0;
     // synchronizacja etapów: numer ostatniego etapu (ps), weekend (wk), wersja lobby (lv), ostatnie komunikaty hosta
@@ -158,15 +160,25 @@
       M.room = room; M.isHost = false; M.joinAt = now();
       room.track({ id: me().id, name: me().name });
       room.toHost({ t: 'hello', name: me().name, v: PG.VERSION }, true);
-      // powtórne powitanie, gdyby host jeszcze nie słuchał
-      M.helloTimer = setInterval(function () { if (M.L || !M.room) { clearInterval(M.helloTimer); return; } M.room.toHost({ t: 'hello', name: me().name, v: PG.VERSION }, true); }, 2500);
+      helloLoop();
       return code;
     });
   };
+  // powtórne powitanie, dopóki host nie dopisze nas do lobby
+  function helloLoop() {
+    clearInterval(M.helloTimer);
+    M.helloTimer = setInterval(function () { if (!M.room || myPlayer()) { clearInterval(M.helloTimer); M.helloTimer = null; return; } M.room.toHost({ t: 'hello', name: me().name, v: PG.VERSION }, true); }, 2500);
+  }
+  function helloCheck() { if (myPlayer()) { clearInterval(M.helloTimer); M.helloTimer = null; } else if (!M.helloTimer && M.room) helloLoop(); }
+  // host odrzucił miejsce (zajęte) — nie ponawiaj prośby
+  function wantCheck() {
+    var w = M.want; if (!w || !M.L) return;
+    if (M.L.players.some(function (p) { return p.id !== me().id && p.team === w.team && p.d === w.d; })) { M.want = null; if (UI.toast) UI.toast('To miejsce zajął już inny gracz'); }
+  }
 
   M.leave = function () {
     var r = M.room;
-    if (r) { if (M.isHost) r.broadcast({ t: 'end', why: 'Host zamknął lobby' }, true); else r.toHost({ t: 'bye' }, true); }
+    if (r) { if (M.isHost) r.broadcast({ t: 'end', why: 'Host zamknął lobby' }, true); else r.toHost({ t: 'bye' }, true); r.h = {}; }
     M.room = null; M.reset();
     // chwila na wysłanie pożegnania
     if (r) setTimeout(function () { try { r.close(); } catch (e) { /* nic */ } }, 300);
@@ -211,7 +223,7 @@
     // rozłączony = brak w obecności i brak jakichkolwiek wiadomości przez dłuższą chwilę
     function quiet(id, ms) { return !M.seen[id] || t - M.seen[id] > ms; }
     if (M.isHost) {
-      Object.keys(M.missing || {}).forEach(function (id) { if (t - M.missing[id] > 9000 && quiet(id, 8000)) { delete M.missing[id]; dropPlayer(id, 'rozłączony'); } });
+      Object.keys(M.missing || {}).forEach(function (id) { if (t - M.missing[id] > 9000 && quiet(id, 8000)) { delete M.missing[id]; dropPlayer(id, 'rozłączony', true); } });
     } else if (M.missing && M.missing.host && t - M.missing.host > 12000 && quiet(M.L.host, 8000)) hostLost('Host rozłączył się');
     if (!M.isHost && M.phase === 'race' && M.lastSnap && t - M.lastSnap > 20000) hostLost('Brak danych od hosta');
   }, 1000);
@@ -242,7 +254,7 @@
   }, 1000);
   function requestSync() {
     var t = now();
-    if (!M.room || M.isHost || t - (M.syncAt || 0) < 1500) return;
+    if (!M.room || M.isHost || M.phase === 'none' || t - (M.syncAt || 0) < 1500) return; // przed dołączeniem — tylko powitanie
     M.syncAt = t;
     M.room.toHost({ t: 'sync' }, true);
   }
@@ -265,28 +277,39 @@
   }
   // klient: pełny stan od hosta (odpowiedź na „sync")
   function applyState(m) {
-    if (m.L && (!m.lv || m.lv >= (M.lv || 0))) { M.L = m.L; M.lv = m.lv || M.lv; if (M.room) M.room.hostId = m.L.host; }
+    if (m.L && (!m.lv || m.lv >= (M.lv || 0))) { M.L = m.L; M.lv = m.lv || M.lv; if (M.room) M.room.hostId = m.L.host; wantCheck(); }
     if (m.go && (!m.cur || m.cur.t !== 'tolobby')) clientPhase(m.go);
     if (m.cur) clientPhase(m.cur);
-    if (M.phase === 'none' && M.L) { clearInterval(M.helloTimer); M.phase = 'lobby'; M.ps = Math.max(M.ps, m.ps || 0); UI.lobby(); }
-    else if (M.phase === 'lobby' && UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh();
+    if (M.phase === 'none' && M.L) { M.phase = 'lobby'; M.ps = Math.max(M.ps, m.ps || 0); helloCheck(); UI.lobby(); }
+    else if (M.phase === 'lobby') { helloCheck(); if (UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh(); }
   }
 
-  function dropPlayer(id, why) {
+  function dropPlayer(id, why, tell) {
     var L = M.L; if (!L) return;
     var pl = L.players.find(function (p) { return p.id === id; });
     if (!pl) return;
     L.players = L.players.filter(function (p) { return p.id !== id; });
     if (M.room) M.room.drop(id);
+    // usunięty, choć może wciąż słuchać — powiedz mu (po zamknięciu łącza idzie przez serwer)
+    if (M.room && tell) M.room.sendTo(id, { t: 'deny', why: 'Rozłączono z lobby' }, true);
     // w wyścigu: bolid przejmuje AI
     if (M.phase === 'race' && G.S && G.net) {
-      G.S.cars.forEach(function (c) { if (c.owner === id && c.remote) { c.remote = false; c.isPlayer = false; delete M.buf[c.ei]; } });
+      G.S.cars.forEach(function (c) { if (c.owner === id && c.remote) takeOver(G.S, c); });
       G.note(pl.name + ' opuścił wyścig — bolid prowadzi AI');
     } else if (UI.toast) UI.toast(pl.name + ' ' + (why || 'wyszedł'));
     if (M.qt && M.phase === 'quali') qMaybeClose();
     if (M.comps && M.phase === 'grid') gridMaybeGo();
     if (M.loaded) loadedCheck();
     pushLobby();
+  }
+  // bolid gracza przejmuje AI: liczenie czasu od teraz (okrążenia z pakietu), bez rekordu z niepełnego okrążenia
+  function takeOver(S, c) {
+    var T = S.T, Lt = T.length, sb = T.sectors;
+    c.remote = false; c.isPlayer = false; delete M.buf[c.ei];
+    if (c.dist >= 0) { c.started = true; var inLap = c.dist - Math.floor(c.dist / Lt) * Lt; c.curSector = inLap < sb[0] * T.ds ? 0 : inLap < sb[1] * T.ds ? 1 : 2; }
+    c.lapStart = c.sectorStart = S.time; c.noBest = true;
+    c.compounds = c.compounds || {}; c.compounds[c.compound] = true;
+    if (c.inPit && !c.pit) c.inPit = false;
   }
   function hostLost(why) {
     var inRace = M.phase === 'race' && G.net;
@@ -295,7 +318,10 @@
     if (inRace && G.S) {
       G.note(why + ' — wyścig kończy się tutaj');
       setTimeout(function () { if (G.net || G.mode === 'race') G.finish({ type: 'race', res: PG.classify(G.S) }); }, 1500);
-    } else { if (UI.toast) UI.toast(why); UI.multi(); }
+    } else {
+      if (G.mode === 'quali') { G.onDone = null; G.startAttract(); } // okrążenie kwalifikacyjne w toku
+      if (UI.toast) UI.toast(why); UI.multi();
+    }
   }
 
   // ---------- wiadomości ----------
@@ -317,7 +343,11 @@
         pushLobby();
         return;
       }
-      if (!pl) return;
+      if (!pl) {
+        // nieznany gracz (np. usunięty z lobby) — powiedz mu o tym, najwyżej co 3 s
+        if (L && t !== 'bye' && t !== 'leave' && t !== 'c' && now() - (M.denyAt[from] || 0) > 3000) { M.denyAt[from] = now(); M.room.sendTo(from, { t: 'deny', why: 'Rozłączono z lobby' }, true); }
+        return;
+      }
       if (t === 'seat') {
         if (L.st !== 'lobby') return;
         var taken = L.players.some(function (p) { return p !== pl && p.team === m.team && p.d === m.d; });
@@ -335,12 +365,12 @@
     // klient
     if (t === 'lobby') {
       if (m.lv && m.lv < (M.lv || 0)) return; // starsza wersja lobby (np. spóźniona przez serwer)
-      clearInterval(M.helloTimer);
       var first = M.phase === 'none';
       M.L = m.L; M.lv = m.lv || M.lv; if (M.room) M.room.hostId = m.L.host;
       if (first && m.ps) M.ps = m.ps; // dołączenie: wcześniejsze etapy tego lobby nas nie dotyczą
-      if (first || M.phase === 'lobby') { M.phase = 'lobby'; if (UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh(); else UI.lobby(); }
-    } else if (t === 'deny') { M.reset(); if (UI.toast) UI.toast(m.why || 'Odmowa dołączenia'); UI.multi(); }
+      wantCheck();
+      if (first || M.phase === 'lobby') { M.phase = 'lobby'; helloCheck(); if (UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh(); else UI.lobby(); }
+    } else if (t === 'deny') hostLost(m.why || 'Odmowa dołączenia');
     else if (t === 'end') hostLost(m.why || 'Lobby zamknięte');
     else if (t === 'state') applyState(m);
     else if (t === 'ph') { if (m.ps > M.ps || (m.lv && m.lv > (M.lv || 0))) requestSync(); }
@@ -465,7 +495,7 @@
     onQres(msg);
   }
   M.qAdvance = function () {
-    if (!M.isHost || !M.q) return;
+    if (!M.isHost || !M.q || M.qt || M.phase !== 'quali') return; // segment wciąż otwarty albo już po kwalifikacjach
     clearTimeout(M.qAdvTimer);
     if (!PG.Quali.done(M.q)) qNextSeg(); else toGrid(M.q.final);
   };
@@ -529,7 +559,7 @@
 
   // ---------- wyścig ----------
   function onRace(m) {
-    M.phase = 'race'; M.buf = {}; M.snap = null; M.lastSnap = now(); M.evq = []; M.sendT = 0; M.gridPos = m.order.indexOf(M.myEi) + 1;
+    M.phase = 'race'; M.buf = {}; M.fwd = {}; M.snap = null; M.lastSnap = now(); M.evq = []; M.sendT = 0; M.gridPos = m.order.indexOf(M.myEi) + 1;
     M.tyreSend = null; M.qSend = null;
     var cfg = M.cfg, mine = me().id;
     var entries = m.order.map(function (ei) {
@@ -596,7 +626,8 @@
       M.sendT = t;
       var arr = [];
       S.cars.forEach(function (c) {
-        if (c.remote) { var b = M.buf[c.ei]; if (b && b.length) arr.push(b[b.length - 1].a); }
+        // stan gracza przekazywany raz (bez powtórek starego pakietu); czas mety wg zegara hosta
+        if (c.remote) { var b = M.buf[c.ei], la = b && b.length && b[b.length - 1].a; if (la && la !== M.fwd[c.ei]) { M.fwd[c.ei] = la; if (c.finished) la[17] = r3(c.finishTime); arr.push(la); } }
         else arr.push(pack(c));
       });
       var sc = S.rc && S.rc.sc;
@@ -618,7 +649,8 @@
       return;
     }
     if (!M.isHost) {
-      if (S.player && S.player.finished) { G.endT += dt; if (G.endT > 60) { M.reset(); G.finish(); } }
+      // host czeka najwyżej 120 s — dopiero potem wynik lokalny; pokój zostaje (przyjdzie klasyfikacja albo powrót do lobby)
+      if (S.player && S.player.finished) { G.endT += dt; if (G.endT > 130) G.finish(); }
       return;
     }
     if (!S.leaderDone) return;
@@ -647,11 +679,14 @@
     var res = (m.rows || []).filter(function (r) { return byEi[r.ei]; }).map(function (r) {
       return { car: byEi[r.ei], pos: r.pos, time: r.time, gap: r.gap, best: r.best, penalty: r.pen, dnf: !!r.dnf, laps: S.laps };
     });
-    G.finish({ type: 'race', res: res });
+    if (G.mode === 'post') UI.mpResults({ type: 'race', res: res }); else G.finish({ type: 'race', res: res });
   }
   M.leaveRace = function () {
-    if (M.room) { if (M.isHost) M.room.broadcast({ t: 'end', why: 'Host opuścił wyścig' }, true); else M.room.toHost({ t: 'leave' }, true); }
-    M.reset(); G.startAttract(); UI.multi();
+    var r = M.room;
+    if (r) { if (M.isHost) r.broadcast({ t: 'end', why: 'Host opuścił wyścig' }, true); else r.toHost({ t: 'leave' }, true); r.h = {}; }
+    M.room = null; M.reset(); G.startAttract(); UI.multi();
+    // chwila na wysłanie pożegnania
+    if (r) setTimeout(function () { try { r.close(); } catch (e) { /* nic */ } }, 300);
   };
   M.backToLobby = function () {
     if (!M.room || !M.L) { UI.multi(); return; }
@@ -870,10 +905,11 @@
         G.startSession({ mode: 'quali', entries: [{ driver: me0.driver, team: me0.team, isPlayer: true, compound: M.cfg.weather === 'rain' ? 'W' : 'S' }], laps: 1, weather: M.cfg.weather, difficulty: M.cfg.difficulty,
           target: m.target, targetLabel: m.keep ? 'AWANS' : 'POLE', qualiName: name }, function (out) {
           if (M.phase === 'race') return; // host już wystartował wyścig
+          if (!M.room || !M.entries) { G.startAttract(); UI.multi(); return; } // lobby już nie ma
           G.startAttract();
           var t = out.aborted || !out.time ? Q.simTime(G.T, me0, cfgEnv(M.cfg), 'normal', m.seg) + 0.8 : out.time;
-          M.sendQTime(t, m.seg);
           UI.mpQualiSeg(m, { how: out.time ? 'Twój czas: ' + PG.fmtTime(t) + '.' : 'Czas symulowany: ' + PG.fmtTime(t) + '.' });
+          M.sendQTime(t, m.seg); // po ekranie: u hosta może od razu zamknąć segment i pokazać wyniki
           runDeferred();
         });
       } }));

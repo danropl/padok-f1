@@ -85,7 +85,7 @@
 
   // Widok 3D (gra wymaga WebGL)
   G.setup3D = function () {
-    var st = PG.Store.data.settings, old = G.V;
+    var st = PG.Store.data.settings, old = G.V, prevMode = old && old.cam && old.cam.mode;
     G.V = null;
     if (old) {
       try { old.dispose(); } catch (e) { /* nic */ }
@@ -101,7 +101,7 @@
       G.used3 = true;
       try {
         G.V = new PG.View3D(G.canvas3, G.T, G.R, { quality: G.quality(), post: st.post !== false });
-        G.V.setMode(st.camera || 'chase');
+        G.V.setMode(prevMode || (G.mode === 'attract' ? 'tv' : (st.camera || 'chase')));
         if (G.S) G.V.setSession(G.S);
         G.use3D = true;
       } catch (e) {
@@ -171,6 +171,7 @@
     G.onDone = onDone; G.endT = 0; G.cfg = cfg;
     G.best = { s: [0, 0, 0], my: [0, 0, 0] }; G.secCols = ['', '', ''];
     G.padUsed = false; G.dmgMsgT = 0;
+    G.perfT = 0; G.dtAvg = 0.016; // pomiar wydajności od nowa
     var p = G.S.player;
     $('hud').hidden = false; G.makeMini();
     $('lights').hidden = cfg.mode !== 'race';
@@ -217,7 +218,7 @@
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
       var k = KEYS[e.code];
       if (G.mode === 'race' || G.mode === 'quali') {
-        if (k) { G.input[k] = true; e.preventDefault(); }
+        if (k && !G.netMenu) { G.input[k] = true; e.preventDefault(); }
         if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { G.togglePause(); e.preventDefault(); }
         if (e.code === 'KeyR' && !e.repeat) G.resetPlayer();
         if (e.code === 'KeyC' && !e.repeat && !G.paused) G.cycleCamera(e.shiftKey ? -1 : 1);
@@ -263,7 +264,7 @@
         } else {
           G.stopHaptics();
           // pad odłączony w trakcie jazdy → pauza
-          if (active && !G.paused && G.padUsed && !G.spectate) G.togglePause();
+          if (active && !G.paused && !G.netMenu && G.padUsed && !G.spectate) G.togglePause();
           G.note('Odłączono kontroler' + (name ? ': ' + name : ''));
         }
         if (PG.UI && PG.UI.onPadChange) { try { PG.UI.onPadChange(on, name); } catch (e) { /* nic */ } }
@@ -288,7 +289,7 @@
       if (!P.connected) return;
       if (active) {
         if (P.hit('pause')) { G.togglePause(); return; } // Options: pauza i wznowienie
-        if (!G.paused) {
+        if (!G.paused && !G.netMenu) {
           if (P.hit('camera')) G.cycleCamera(1);
           if (P.hit('reset')) G.resetPlayer();
           if (P.hit('box')) G.toggleBox();
@@ -361,7 +362,7 @@
 
   G.resetPlayer = function () {
     var p = G.S && G.S.player;
-    if (!p || p.finished || G.paused || G.S.state === 'lights') return;
+    if (!p || p.finished || p.pit || p.inPit || G.paused || G.S.state === 'lights') return;
     if (Math.abs(p.v) < 25) { PG.resetCar(p, G.T); G.msg('Powrót na tor', '', '', 1.2); }
   };
 
@@ -410,15 +411,18 @@
     requestAnimationFrame(G.frame);
     var dt = Math.min(0.05, Math.max(0.001, (t - (G.last || t)) / 1000));
     G.last = t;
-    // adaptacyjna rozdzielczość: przy słabym sprzęcie zmniejsz bufor
-    G.dtAvg = (G.dtAvg || 0.016) * 0.97 + dt * 0.03;
-    G.perfT = (G.perfT || 0) + dt;
-    if (G.perfT > 2.5 && G.dtAvg > 1 / 38 && (G.rs || 1) > 0.55 && !document.hidden) { G.rs = (G.rs || 1) * 0.85; G.perfT = 0; G.resize(); }
+    // adaptacyjna rozdzielczość (tylko w jeździe): przy słabym sprzęcie zmniejsz bufor, przy zapasie wróć wyżej
+    if (G.mode === 'race' || G.mode === 'quali') {
+      G.dtAvg = (G.dtAvg || 0.016) * 0.97 + dt * 0.03;
+      G.perfT = (G.perfT || 0) + dt;
+      if (G.perfT > 2.5 && G.dtAvg > 1 / 38 && (G.rs || 1) > 0.55 && !document.hidden) { G.rs = (G.rs || 1) * 0.85; G.perfT = 0; G.resize(); }
+      else if (G.perfT > 5 && G.dtAvg < 1 / 55 && (G.rs || 1) < 1 && !document.hidden) { G.rs = Math.min(1, (G.rs || 1) / 0.85); G.perfT = 0; G.resize(); }
+    }
     if (!G.S) return;
     G.padFrame(G.mode === 'race' || G.mode === 'quali');
     var S = G.S; if (!S) return; // pad mógł zmienić sesję (np. wyjście do menu)
     var active = (G.mode === 'race' || G.mode === 'quali');
-    var input = active ? G.readInput() : NOINPUT;
+    var input = (active && !G.netMenu) ? G.readInput() : NOINPUT; // menu online: bolid bez sterowania
     if (G.net && PG.Multi) { try { PG.Multi.pre(S, dt); } catch (e) { console.warn('Multiplayer (przed krokiem):', e); } }
     if (!G.paused) {
       for (var k = 0; k < G.timeScale; k++) {
@@ -428,6 +432,7 @@
       if (active) G.checkEnd(dt);
       if (G.msgT > 0) { G.msgT -= dt; if (G.msgT <= 0) G.msg('', ''); }
     }
+    if (G.S !== S) return; // koniec sesji w tej klatce (nowa sesja od następnej)
     if (G.net && PG.Multi) { try { PG.Multi.post(S, dt); } catch (e) { console.warn('Multiplayer (po kroku):', e); } }
     G.hapticsFrame(S, dt);
     var line = (active && !G.spectate && S.state !== 'lights') ? G.lineMode() : 'off';
@@ -541,10 +546,10 @@
         case 'lap':
           if (e.car === p && S.mode === 'race' && !p.finished) {
             var left = S.laps - p.lap;
-            G.msg(left === 1 ? 'OSTATNIE OKRĄŻENIE' : 'OKRĄŻENIE ' + (p.lap + 1) + '/' + S.laps, PG.fmtTime(e.t), '', 2.2);
-            // przypomnienie o obowiązkowej zmianie mieszanki
-            if (PG.Pit && PG.Pit.ruleActive(S) && !PG.Pit.ruleOk(p) && !p.pitReq && !p.inPit && left > 1 && left <= Math.max(3, Math.round(S.laps * 0.4)))
-              G.note('Obowiązkowy pit stop: użyj drugiej mieszanki (B' + (padConnected() ? ' / L1' : '') + ')');
+            // przypomnienie o obowiązkowej zmianie mieszanki (w tym samym komunikacie)
+            var rem = PG.Pit && PG.Pit.ruleActive(S) && !PG.Pit.ruleOk(p) && !p.pitReq && !p.inPit && left > 1 && left <= Math.max(3, Math.round(S.laps * 0.4));
+            G.msg(left === 1 ? 'OSTATNIE OKRĄŻENIE' : 'OKRĄŻENIE ' + (p.lap + 1) + '/' + S.laps,
+              rem ? PG.fmtTime(e.t) + ' · Obowiązkowy pit stop: użyj drugiej mieszanki (B' + (padConnected() ? ' / L1' : '') + ')' : PG.fmtTime(e.t), '', rem ? 3 : 2.2);
           }
           break;
         case 'fastest': if (e.car === p) G.msg('NAJSZYBSZE OKRĄŻENIE', PG.fmtTime(e.t), 'purple', 2.5); break;

@@ -59,7 +59,7 @@
   // Wjazd: bolid przekroczył początek zjazdu z prośbą o pit stop
   Pit.check = function (c, S, prevIdx) {
     var T = S.T, P = T.pit;
-    if (!P || !c.pitReq || c.pit || c.finished || c.retired || S.mode !== 'race' || S.state === 'lights') return;
+    if (!P || !c.pitReq || c.pit || c.finished || c.retired || c.retiring || S.mode !== 'race' || S.state === 'lights') return;
     var N = T.N, a = wrapI(prevIdx - P.entry, N), b = wrapI(c.idx - P.entry, N);
     if (!(a > N / 2 && b < N / 8)) return;
     var dmg = c.dmg || {};
@@ -166,7 +166,7 @@
 
   // Strategia AI (po każdym okrążeniu, po uszkodzeniu, przy wyjeździe samochodu bezpieczeństwa)
   Pit.aiPlan = function (c, S, cheap) {
-    if (S.mode !== 'race' || !S.T.pit || c.pit || c.pitReq || c.finished || c.retired) return;
+    if (S.mode !== 'race' || !S.T.pit || c.pit || c.pitReq || c.finished || c.retired || c.retiring) return;
     var R = S.laps - c.lap - 1; // pełne okrążenia po tym
     if (R < 1) return;
     var d = c.dmg || {}, k = c.aiPit || (c.aiPit = { thr: 0.66 + Math.random() * 0.1 });

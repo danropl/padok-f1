@@ -63,10 +63,12 @@
       api.onMsg = function (f) { api.mf.push(f); };
       api.onPresence = function (f) { api.pf.push(f); };
       api.send = function (m) { if (api.closed) return; try { var r = ch.send({ type: 'broadcast', event: 'm', payload: m }); if (r && r.catch) r.catch(noop); } catch (e) { /* nic */ } };
-      api.track = function (meta) { try { var r = ch.track(meta); if (r && r.catch) r.catch(noop); } catch (e) { /* nic */ } };
+      api.track = function (meta) { api.meta = meta; try { var r = ch.track(meta); if (r && r.catch) r.catch(noop); } catch (e) { /* nic */ } };
       api.close = function () { api.closed = true; try { ch.untrack(); } catch (e) { /* nic */ } try { Net.sb.removeChannel(ch); } catch (e2) { /* nic */ } };
       var done = false;
       ch.subscribe(function (status, err) {
+        // po ponownym połączeniu serwer nie pamięta obecności — zgłoś ją od nowa
+        if (done && status === 'SUBSCRIBED' && api.meta && !api.closed) api.track(api.meta);
         if (done) return;
         if (status === 'SUBSCRIBED') { done = true; res(api); }
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') { done = true; rej(err || new Error('Kanał ' + name + ': ' + status)); }
@@ -127,6 +129,7 @@
     pc.onconnectionstatechange = function () {
       var s = pc.connectionState;
       if (s === 'failed' || s === 'closed' || s === 'disconnected') { if (!self.closed) { self.ok = false; if (s !== 'disconnected') self.relay = true; room._peerState(self); } }
+      else if (s === 'connected' && !self.closed && !self.ok && self.dcU && self.dcR && self.dcU.readyState === 'open' && self.dcR.readyState === 'open') { self.ok = true; self.relay = false; room._peerState(self); }
     };
     if (initiator) {
       this.setup(pc.createDataChannel('u', { ordered: false, maxRetransmits: 0 }));
@@ -180,7 +183,7 @@
   // handlers: msg(m, fromId), presence(list), peer(peer)
   function Room(code, isHost, ch, handlers) {
     this.code = code; this.isHost = isHost; this.ch = ch; this.h = handlers || {};
-    this.peers = {}; this.hostId = isHost ? Net.me.id : null; this.relayAt = {}; this.closed = false; this.seq = 0; this.seen = {}; this.seenN = 0;
+    this.peers = {}; this.hostId = isHost ? Net.me.id : null; this.relayAt = {}; this.closed = false; this.seq = 0; this.nonce = rid(6); this.seen = {}; this.seenN = 0;
     var self = this;
     ch.onMsg(function (m) {
       if (!m || self.closed || m.f === Net.me.id) return;
@@ -201,8 +204,9 @@
   Room.prototype._recv = function (m, from, viaRelay) {
     if (this.closed) return;
     m.f = m.f || from;
-    // stan przez przekaźnik od gracza z działającym połączeniem bezpośrednim — ignoruj (duplikat)
-    if (viaRelay && m.u && this.peers[from] && this.peers[from].ok) return;
+    // stan przez przekaźnik od gracza, od którego właśnie płynie ruch bezpośredni — ignoruj (duplikat)
+    var p = this.peers[from];
+    if (viaRelay && m.u && p && p.ok && now() - p.last < 500) return;
     // wiadomości pewne mogą dojść dwiema drogami — tylko raz
     if (m.mid) {
       if (this.seen[m.mid]) return;
@@ -223,7 +227,7 @@
   Room.prototype.sendTo = function (id, msg, reliable) {
     if (this.closed) return;
     msg.f = Net.me.id;
-    if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + (++this.seq);
+    if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + this.nonce + ':' + (++this.seq);
     var p = this.peers[id];
     if (p && p.send(msg, reliable)) return;
     if (!reliable) {
@@ -236,7 +240,7 @@
   Room.prototype.broadcast = function (msg, reliable, ids) {
     if (this.closed) return;
     msg.f = Net.me.id;
-    if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + (++this.seq);
+    if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + this.nonce + ':' + (++this.seq);
     var s = null, relayNeeded = false, self = this;
     (ids || Object.keys(this.peers)).forEach(function (id) {
       var p = self.peers[id];
@@ -249,7 +253,7 @@
   };
   Room.prototype.toHost = function (msg, reliable) {
     if (this.hostId) { this.sendTo(this.hostId, msg, reliable); return; }
-    msg.f = Net.me.id; if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + (++this.seq);
+    msg.f = Net.me.id; if (reliable && !msg.mid) msg.mid = Net.me.id + ':' + this.nonce + ':' + (++this.seq);
     msg.to = '*'; this.ch.send(msg);
   };
   Room.prototype.track = function (meta) { this.ch.track(meta); };

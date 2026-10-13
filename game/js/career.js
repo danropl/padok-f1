@@ -115,7 +115,7 @@
   C.get = function () { return Store.data.career; };
   C.team = function (car, id) { return car.teams.find(function (t) { return t.id === (id || car.teamId); }); };
   C.player = function (car) { var t = C.team(car); return t.drivers.find(function (d) { return d.isPlayer; }); };
-  C.salary = function (car) { var t = C.team(car); return car.mode === 'owner' ? 120 + Math.round(car.rep * 3) : ({ 1: 420, 2: 260, 3: 150 }[t.tier] || 150); };
+  C.salary = function (car) { var t = C.team(car); if (car.mode !== 'owner' && car.salary) return car.salary; return car.mode === 'owner' ? 120 + Math.round(car.rep * 3) : ({ 1: 420, 2: 260, 3: 150 }[t.tier] || 150); };
 
   C.entries = function (car) {
     var out = [];
@@ -133,11 +133,11 @@
   C.applyResult = function (car, res, extra) {
     // res: klasyfikacja [{car:{driver,team,isPlayer}, pos, best}]
     var fastest = null;
-    res.forEach(function (r) { if (r.best && (!fastest || r.best < fastest.best)) fastest = r; });
+    res.forEach(function (r) { if (!r.dnf && r.best && (!fastest || r.best < fastest.best)) fastest = r; });
     var report = { round: car.round, name: PG.CALENDAR[car.round].name, season: car.season, rows: [], grid: extra.grid, weather: extra.weather };
     res.forEach(function (r) {
-      var pts = PG.POINTS[r.pos - 1] || 0;
-      if (fastest === r && r.pos <= 10) pts += 1;
+      var pts = r.dnf ? 0 : (PG.POINTS[r.pos - 1] || 0);
+      if (!r.dnf && fastest === r && r.pos <= 10) pts += 1;
       var du = r.car.driver.uid, tu = r.car.team.id;
       car.standings.d[du] = (car.standings.d[du] || 0) + pts;
       car.standings.t[tu] = (car.standings.t[tu] || 0) + pts;
@@ -200,7 +200,7 @@
     if (car.mode === 'owner') car.money += Math.max(0, 11 - teamPos) * 80;
   };
 
-  C.nextSeason = function (car, acceptTeamId) {
+  C.nextSeason = function (car, acceptTeamId, salary) {
     if (acceptTeamId && acceptTeamId !== car.teamId) {
       var oldT = C.team(car), newT = C.team(car, acceptTeamId);
       var me = C.player(car);
@@ -210,6 +210,7 @@
       var mi = oldT.drivers.indexOf(me);
       oldT.drivers[mi] = leaving; // zamiana miejsc
       car.teamId = acceptTeamId;
+      car.salary = salary || null; // pensja z podpisanej oferty
     }
     car.teams.forEach(function (t) { ['power', 'aero', 'tyre'].forEach(function (k) { t.car[k] = Math.round((t.car[k] - (t.car[k] - 85) * 0.35) * 10) / 10; }); });
     car.season++; car.round = 0; car.standings = { d: {}, t: {} }; car.offers = null; car.seasonOver = false; car.lastReport = null;

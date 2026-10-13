@@ -35,7 +35,7 @@
   RC.retire = function (S, c, why) {
     if (c.retired || c.retiring || c.isPlayer && !S.autoPlayer) return;
     var T = S.T, side = (c.lat || 0) >= 0 ? 1 : -1;
-    c.retiring = true; c.retireWhy = why; c.retLat = side * (T.hw + 3.2); c.pitReq = false;
+    c.retiring = true; c.retireWhy = why; c.retLat = side * (T.hw + 3.2); c.pitReq = false; c.retireT = 0;
     S.events.push({ type: 'retire', car: c, why: why });
     if (!S.rc || S.rc.level === 'off' || S.mode !== 'race' || S.state !== 'run') return;
     // na torze lub tuż przy nim — samochód bezpieczeństwa; daleko na poboczu — VSC
@@ -127,7 +127,7 @@
   RC.caps = function (S) {
     var rc = S.rc, cars = S.cars, i, j, c;
     for (i = 0; i < cars.length; i++) cars[i].rcCap = Infinity;
-    if (!rc || S.mode !== 'race' || S.state !== 'run' || rc.mode === 'green') return;
+    if (!rc || S.mode !== 'race' || (S.state !== 'run' && S.state !== 'finish') || rc.mode === 'green') return;
     var T = S.T, N = T.N, ds = T.ds, look = Math.round(5 / ds);
     for (i = 0; i < cars.length; i++) {
       c = cars[i];
@@ -166,7 +166,8 @@
     var mc = c.maxCurv > 0 ? c.maxCurv : 0.05;
     c.steer = clamp(2 * Math.sin(ang) / Math.max(Math.hypot(tx - c.x, ty - c.y), 4) / mc, -1, 1);
     c.throttle = 0; c.brake = v > 12 ? 0.3 : 0.55; c.drsOpen = false;
-    if (v < 0.4 && Math.abs(c.lat || 0) > T.hw) { c.retired = true; c.retiring = false; c.v = 0; }
-    else if (v < 0.4) c.throttle = 0.25; // jeszcze na torze: dotoczyć się na bok
+    c.retireT = (c.retireT || 0) + dt;
+    if (v < 0.4 && Math.abs(c.lat || 0) > T.hw || c.retireT > 20) { c.retired = true; c.retiring = false; c.v = 0; }
+    else if (v < 0.4) { c.throttle = 0.25; c.brake = 0; } // jeszcze na torze: dotoczyć się na bok
   };
 })(PG);
