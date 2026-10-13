@@ -167,6 +167,18 @@ kbd { font-family: var(--font-ui); font-size: 14px; font-weight: 700; border: 1p
 #msg small { display: block; font-size: 20px; font-weight: 600; font-style: normal; color: var(--amber); }
 #msg.purple small { color: #d9b8ff; }
 #msg.dmg { color: #ffc2bb; }
+#msg.rc { color: #ffd84d; }
+#msg.green { color: #5cf09a; }
+/* pit stop i dyrekcja wyścigu */
+.pitb { font-family: var(--font-num); font-weight: 700; font-size: 15px; padding: 1px 7px; border-radius: 4px; background: #1d4ed8; color: #fff; letter-spacing: 0.04em; white-space: nowrap; }
+.pitb.stop { background: var(--amber); color: #111; }
+.pitb.lane { background: #334155; }
+#rcb { position: absolute; left: 50%; top: max(50px, calc(env(safe-area-inset-top, 0px) + 50px)); transform: translateX(-50%); padding: 6px 16px; border-radius: 6px; background: #ffc93c; color: #111; font-weight: 900; font-style: italic; letter-spacing: 0.06em; font-size: 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); white-space: nowrap; }
+#rcb small { font-style: normal; font-weight: 700; margin-left: 10px; font-size: 14px; letter-spacing: 0.02em; }
+#rcb.flash { animation: rcFlash 1s steps(1, end) infinite; }
+@keyframes rcFlash { 50% { background: #b8860b; color: #fff; } }
+#tower .hd .rcf { background: #ffc93c; color: #111; border-radius: 3px; padding: 0 5px; margin-left: 6px; font-size: 13px; }
+#tower .r .g.dnf { color: #ff8a8a; }
 #msg.dmg small { color: var(--amber); }
 #next { position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 15px; background: rgba(12,16,22,0.8); border-radius: 99px; padding: 4px 14px; white-space: nowrap; }
 #next b { color: var(--amber); }
@@ -216,7 +228,7 @@ canvas.car3d { border-radius: 6px; }
   #pauseBtn { left: auto; right: 108px; transform: none; }
   .screen.dim { background: rgba(8,11,16,0.9); }
 }
-@media (prefers-reduced-motion: reduce) { button { transition: none; } .drsb, .drsb.ready, .drsb.flash, .drsb.closing, .drsb.flash::after, #dmgw.hit, #dmgw .pt.blink { animation: none; } .drsb .wing i:nth-child(2) { transition: none; } }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } .drsb, .drsb.ready, .drsb.flash, .drsb.closing, .drsb.flash::after, #dmgw.hit, #dmgw .pt.blink, #rcb.flash { animation: none; } .drsb .wing i:nth-child(2) { transition: none; } }
 </style>
 
 <div id="app">
@@ -251,6 +263,7 @@ canvas.car3d { border-radius: 6px; }
         <div class="flags">
           <span class="drsb off" id="drsb" role="status" aria-label="DRS"><span class="wing" aria-hidden="true"><i></i><i></i></span><span class="t">DRS</span><span class="auto">AUTO</span></span>
           <span class="tyre" id="dTyre"><b></b></span><span class="num" id="dWear" style="font-size:18px">100%</span>
+          <span class="pitb" id="dPit" hidden></span>
           <span class="num" id="dPos" style="margin-left:auto"></span>
         </div>
       </div>
@@ -258,6 +271,7 @@ canvas.car3d { border-radius: 6px; }
     <div id="next"></div>
     <div id="msg"></div>
     <div id="lights" hidden><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="rcb" hidden></div>
     <button id="pauseBtn" type="button">II Pauza</button>
     <div id="touch" hidden>
       <div class="tb" id="tL">◀</div><div class="tb" id="tR">▶</div>
@@ -272,6 +286,9 @@ canvas.car3d { border-radius: 6px; }
 <script src="js/track.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/session.js"></script>
+<script src="js/quali.js"></script>
+<script src="js/pit.js"></script>
+<script src="js/racecontrol.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/render.js"></script>
 <script src="js/audio.js"></script>
@@ -284,5 +301,7 @@ canvas.car3d { border-radius: 6px; }
 <script src="js/input.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/net.js"></script>
+<script src="js/multi.js"></script>
 
 </body></html>

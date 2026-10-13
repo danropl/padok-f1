@@ -109,6 +109,17 @@
     T.mainFrom = wrapI(straightF - Math.round(20 / ds), N);
     T.mainTo = wrapI(ret - Math.round(140 / ds), N);
     for (var mi = T.mainFrom; mi !== T.mainTo; mi = wrapI(mi + 1, N)) { T.barR[mi] = Math.min(T.barR[mi], T.hw + 3); T.barL[mi] = Math.min(T.barL[mi], T.hw + 6); }
+    // aleja serwisowa po prawej stronie prostej startowej (pas hw+4,2 … hw+13 za murem, garaże dalej):
+    // zjazd za Parabolicą, ograniczenie 80 km/h tylko przy garażach, wyjazd przed Rettifilo
+    var pitFrom = wrapI(T.mainFrom + Math.round(40 / ds), N), pitTo = wrapI(ret - Math.round(180 / ds), N), gar0 = wrapI(-Math.round(260 / ds), N);
+    T.pit = {
+      entry: wrapI(pitFrom - Math.round(150 / ds), N), from: pitFrom, to: pitTo, exit: wrapI(pitTo + Math.round(110 / ds), N),
+      garage0: gar0, limFrom: wrapI(gar0 - Math.round(40 / ds), N), limTo: wrapI(gar0 + Math.round(370 / ds), N),
+      lane: T.hw + 6.6, box: T.hw + 10.6, limit: 80 / 3.6
+    };
+    // przejazd przez linię muru na zjeździe i wyjeździe: asfalt i bariera dalej od toru
+    for (var pe = T.pit.entry; pe !== pitFrom; pe = wrapI(pe + 1, N)) { T.barR[pe] = Math.max(T.barR[pe], T.hw + 14); T.surfR[pe] = 2; }
+    for (var px = pitTo; px !== T.pit.exit; px = wrapI(px + 1, N)) { T.barR[px] = Math.max(T.barR[px], T.hw + 14); T.surfR[px] = 2; }
     T.line = racingLine(T);
     buildGrid(T);
     var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;

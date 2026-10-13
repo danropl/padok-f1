@@ -158,6 +158,7 @@
 
   G.startAttract = function () {
     G.stopHaptics();
+    G.net = false; G.netMenu = false;
     var entries = [];
     PG.allTeams().slice(0, 10).forEach(function (t) { t.drivers.forEach(function (d) { entries.push({ driver: d, team: t }); }); });
     G.S = PG.createSession({ track: G.T, entries: entries, mode: 'attract', laps: 99, weather: 'sun', difficulty: 'hard', damage: PG.Store.data.settings.damage || 'full' });
@@ -176,11 +177,13 @@
     var st = PG.Store.data.settings;
     G.S = PG.createSession({
       track: G.T, entries: cfg.entries, mode: cfg.mode, laps: cfg.laps, weather: cfg.weather, difficulty: cfg.difficulty, autoPlayer: !!cfg.spectate,
-      damage: st.damage || 'full', assists: G.assistOpts()
+      damage: cfg.damage || st.damage || 'full', assists: G.assistOpts(), wearMul: cfg.wearMul || 1, incidents: cfg.incidents || 'rare',
+      netClient: !!cfg.netClient
     });
     G.S.cars.forEach(G.texFor);
     if (G.V) { G.V.setSession(G.S); G.V.setMode(cfg.spectate ? 'tv' : (st.camera || 'chase')); }
     G.mode = cfg.mode; G.spectate = !!cfg.spectate; G.timeScale = cfg.spectate ? 8 : 1; G.paused = false;
+    G.net = !!cfg.net; G.netMenu = false;
     G.onDone = onDone; G.endT = 0; G.cfg = cfg;
     G.best = { s: [0, 0, 0], my: [0, 0, 0] }; G.secCols = ['', '', ''];
     G.padUsed = false; G.dmgMsgT = 0;
@@ -234,6 +237,9 @@
         if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { G.togglePause(); e.preventDefault(); }
         if (e.code === 'KeyR' && !e.repeat) G.resetPlayer();
         if (e.code === 'KeyC' && !e.repeat && !G.paused) G.cycleCamera(e.shiftKey ? -1 : 1);
+        if (e.code === 'KeyB' && !e.repeat && !G.paused) G.toggleBox();
+        var dig = { Digit1: 'S', Digit2: 'M', Digit3: 'H', Digit4: 'W', Numpad1: 'S', Numpad2: 'M', Numpad3: 'H', Numpad4: 'W' }[e.code];
+        if (dig && !e.repeat && !G.paused) G.pickComp(dig);
       }
       if (e.code === 'KeyM' && !e.repeat) { var st = PG.Store.data.settings; st.sound = !st.sound; PG.Audio.setOn(st.sound); PG.Store.save(); }
     });
@@ -254,7 +260,7 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) {
         G.stopHaptics();
-        if ((G.mode === 'race' || G.mode === 'quali') && !G.paused) G.togglePause();
+        if ((G.mode === 'race' || G.mode === 'quali') && !G.paused && !(G.net && G.mode === 'race')) G.togglePause();
       }
     });
     try { G.focused = document.hasFocus ? document.hasFocus() : true; } catch (e) { G.focused = true; }
@@ -301,6 +307,9 @@
         if (!G.paused) {
           if (P.hit('camera')) G.cycleCamera(1);
           if (P.hit('reset')) G.resetPlayer();
+          if (P.hit('box')) G.toggleBox();
+          if (P.hit('compUp')) G.cycleComp(-1);
+          if (P.hit('compDown')) G.cycleComp(1);
           return;
         }
       }
@@ -330,6 +339,30 @@
     return o;
   };
 
+  // ---------- PIT STOP: prośba o zjazd i wybór opon ----------
+  G.compList = function () { return G.S && G.S.env.wet ? ['W', 'M', 'H', 'S'] : ['S', 'M', 'H', 'W']; };
+  G.toggleBox = function () {
+    var S = G.S, p = S && S.player;
+    if (!p || S.mode !== 'race' || G.spectate || !PG.Pit || p.finished) return;
+    if (p.inPit) { G.msg('', 'Już jesteś w alei serwisowej', '', 1.4); return; }
+    PG.Pit.request(p, S, !p.pitReq);
+    var T = PG.TYRES[p.pitComp] || PG.TYRES.M;
+    if (p.pitReq) G.msg('BOX, BOX', 'Zjazd na wjeździe za Parabolicą · opony: ' + T.name + ' (1–4' + (padConnected() ? ' / krzyżak ▲▼' : '') + ')', '', 3);
+    else G.msg('', 'Odwołano zjazd do boksu', '', 1.6);
+  };
+  G.pickComp = function (k) {
+    var S = G.S, p = S && S.player;
+    if (!p || S.mode !== 'race' || !PG.TYRES[k]) return;
+    p.pitComp = k;
+    G.msg('', 'Opony na pit stop: ' + PG.TYRES[k].name + (p.pitReq ? '' : ' · B' + (padConnected() ? ' / L1' : '') + ' zgłasza zjazd'), '', 1.8);
+  };
+  G.cycleComp = function (dir) {
+    var S = G.S, p = S && S.player;
+    if (!p || S.mode !== 'race') return;
+    var L = G.compList(), i = L.indexOf(p.pitComp || (PG.Pit ? PG.Pit.suggest(p, S) : 'M'));
+    G.pickComp(L[(i + dir + L.length) % L.length]);
+  };
+
   G.cycleCamera = function (dir) {
     var st = PG.Store.data.settings;
     if (G.use3D) {
@@ -354,6 +387,12 @@
 
   G.togglePause = function () {
     if (G.mode !== 'race' && G.mode !== 'quali') return;
+    // wyścig online: menu bez zatrzymywania czasu (inni jadą dalej)
+    if (G.net && G.mode === 'race') {
+      G.netMenu = !G.netMenu; G.input = {};
+      if (G.netMenu) PG.UI.showPause(); else { G.padDrsBlock = true; PG.UI.hidePause(); }
+      return;
+    }
     G.paused = !G.paused;
     G.input = {};
     if (!G.paused) G.padDrsBlock = true; // ✕ użyty do wznowienia nie otwiera DRS
@@ -400,6 +439,7 @@
     var S = G.S; if (!S) return; // pad mógł zmienić sesję (np. wyjście do menu)
     var active = (G.mode === 'race' || G.mode === 'quali');
     var input = active ? G.readInput() : NOINPUT;
+    if (G.net && PG.Multi) { try { PG.Multi.pre(S, dt); } catch (e) { console.warn('Multiplayer (przed krokiem):', e); } }
     if (!G.paused) {
       for (var k = 0; k < G.timeScale; k++) {
         PG.updateSession(S, dt, input);
@@ -409,6 +449,7 @@
       if (active) G.checkEnd(dt);
       if (G.msgT > 0) { G.msgT -= dt; if (G.msgT <= 0) G.msg('', ''); }
     }
+    if (G.net && PG.Multi) { try { PG.Multi.post(S, dt); } catch (e) { console.warn('Multiplayer (po kroku):', e); } }
     G.hapticsFrame(S, dt);
     var line = (active && !G.spectate && S.state !== 'lights') ? G.lineMode() : 'off';
     if (G.use3D) G.draw3D(S, dt, active, line);
@@ -546,29 +587,43 @@
           if (e.car === p && S.mode === 'race' && !p.finished) {
             var left = S.laps - p.lap;
             G.msg(left === 1 ? 'OSTATNIE OKRĄŻENIE' : 'OKRĄŻENIE ' + (p.lap + 1) + '/' + S.laps, PG.fmtTime(e.t), '', 2.2);
+            // przypomnienie o obowiązkowej zmianie mieszanki
+            if (PG.Pit && PG.Pit.ruleActive(S) && !PG.Pit.ruleOk(p) && !p.pitReq && !p.inPit && left > 1 && left <= Math.max(3, Math.round(S.laps * 0.4)))
+              G.note('Obowiązkowy pit stop: użyj drugiej mieszanki (B' + (padConnected() ? ' / L1' : '') + ')');
           }
           break;
         case 'fastest': if (e.car === p) G.msg('NAJSZYBSZE OKRĄŻENIE', PG.fmtTime(e.t), 'purple', 2.5); break;
         case 'finish': if (e.car === p) { G.stopHaptics(); G.msg('META! P' + p.pos, p.penalty ? 'z karą +' + p.penalty + ' s' : '', '', 4); A.beep(660, 0.2); A.beep(990, 0.4); } break;
         case 'qualidone': G.stopHaptics(); G.msg('CZAS OKRĄŻENIA', PG.fmtTime(e.t), 'purple', 4); break;
+        case 'pitin': if (e.car === p) G.msg('ALEJA SERWISOWA', 'Ogranicznik 80 km/h przy garażach', '', 2.2); break;
+        case 'pitdone':
+          G.texFor(e.car);
+          if (e.car === p) G.msg('PIT STOP ' + e.t.toFixed(1).replace('.', ',') + ' s', 'Opony: ' + (PG.TYRES[e.comp] || PG.TYRES.M).name + (e.fixed ? ' · nowe skrzydło' : ''), '', 2.6);
+          break;
+        case 'pitout': if (e.car === p) G.msg('', 'Wyjazd z alei — wracasz do wyścigu', '', 1.6); break;
+        case 'rc': G.msg(e.text, e.sub, e.mode === 'green' ? 'green' : 'rc', e.mode === 'green' ? 2.5 : 3.5); break;
+        case 'retire': if (e.car !== p) G.note(PG.driverName(e.car.driver) + ' odpada z wyścigu · ' + (e.why === 'crash' ? 'wypadek' : 'awaria')); break;
+        case 'rulepen': if (e.car === p) G.msg('KARA +30 s', 'Nie użyto dwóch różnych mieszanek', 'dmg', 3.5); break;
       }
     }
   };
 
   G.checkEnd = function (dt) {
     var S = G.S, p = S.player;
+    if (G.net && S.mode === 'race' && PG.Multi) { PG.Multi.checkEnd(dt); return; }
     if (S.mode === 'quali' && S.done) { G.endT += dt; if (G.endT > 2.2) G.finish(); }
     if (S.mode === 'race' && p.finished) {
       G.endT += dt;
-      var allDone = S.cars.every(function (c) { return c.finished; });
+      var allDone = S.cars.every(function (c) { return c.finished || c.retired || c.retiring; });
       if (G.endT > 5 || (allDone && G.endT > 2)) G.finish();
     }
   };
 
-  G.finish = function () {
+  G.finish = function (outOv) {
     G.stopHaptics();
     var S = G.S, cb = G.onDone; G.onDone = null;
-    var out = S.mode === 'quali' ? { type: 'quali', time: S.player.finishTime || S.player.lastLap } : { type: 'race', res: PG.classify(S), fastest: S.fastest };
+    var out = outOv || (S.mode === 'quali' ? { type: 'quali', time: S.player.finishTime || S.player.lastLap } : { type: 'race', res: PG.classify(S), fastest: S.fastest });
+    G.net = false; G.netMenu = false;
     G.mode = 'post';
     $('hud').hidden = true;
     G.paused = false;
@@ -609,7 +664,8 @@
     var rp = $('rpm');
     G.hud = {
       spd: $('dSpd'), gear: $('dGear'), rpm: rp ? Array.prototype.slice.call(rp.children) : [], drs: $('drsb'),
-      tyre: $('dTyre'), wear: $('dWear'), pos: $('dPos'), laps: $('laps'), next: $('next'), tower: $('tower')
+      tyre: $('dTyre'), wear: $('dWear'), pos: $('dPos'), laps: $('laps'), next: $('next'), tower: $('tower'),
+      pit: $('dPit'), rcb: $('rcb')
     };
     var w = $('dmgw');
     G.dmgW = null;
@@ -689,6 +745,28 @@
     if (H.tyre && H.tyre._c !== tyre.color) { H.tyre._c = tyre.color; H.tyre.style.color = tyre.color; }
     setText(H.wear, Math.round((1 - p.wear) * 100) + '%');
     setText(H.pos, S.mode === 'race' ? 'P' + p.pos : '');
+    // pit stop: prośba, przejazd aleją, postój
+    if (H.pit) {
+      var pt = p.pit, ptxt = '', pcls = 'pitb';
+      if (pt && pt.ph === 'stop') { ptxt = 'POSTÓJ ' + Math.max(0, pt.t).toFixed(1).replace('.', ','); pcls += ' stop'; }
+      else if (pt) { ptxt = 'ALEJA 80'; pcls += ' lane'; }
+      else if (p.pitReq) ptxt = 'BOX · ' + (p.pitComp || 'M');
+      if (H.pit._t !== ptxt) { H.pit._t = ptxt; H.pit.textContent = ptxt; H.pit.hidden = !ptxt; }
+      if (H.pit.className !== pcls) H.pit.className = pcls;
+    }
+    // dyrekcja wyścigu: SC / VSC
+    if (H.rcb) {
+      var rc = S.rc, rtxt = '', rcls = '';
+      if (rc && S.mode === 'race') {
+        var lim = p.rcCap < Infinity && !p.inPit ? ' · limit ' + Math.round(p.rcCap * 3.6) + ' km/h' : '';
+        if (rc.mode === 'sc') { rtxt = 'SAFETY CAR<small>bez wyprzedzania' + lim + '</small>'; rcls = 'flash'; }
+        else if (rc.mode === 'scIn') rtxt = 'SC ZJEŻDŻA<small>restart na linii mety</small>';
+        else if (rc.mode === 'vsc') { rtxt = 'VSC<small>wirtualny samochód bezpieczeństwa' + lim + '</small>'; rcls = 'flash'; }
+        else if (rc.mode === 'vscEnd') rtxt = 'VSC KOŃCZY SIĘ<small>zaraz zielona flaga</small>';
+      }
+      if (H.rcb._h !== rtxt) { H.rcb._h = rtxt; H.rcb.innerHTML = rtxt; H.rcb.hidden = !rtxt; }
+      if (H.rcb.className !== rcls) H.rcb.className = rcls;
+    }
     G.updateDmg(S, p);
     // czasy okrążeń
     var cur = p.started ? S.time - p.lapStart : 0;
@@ -714,7 +792,8 @@
     // wieża czasów
     var html = '';
     if (S.mode === 'race') {
-      html += '<div class="hd"><span>OKR</span><span class="num">' + Math.min(S.laps, Math.max(1, (S.order[0].lap || 0) + 1)) + '/' + S.laps + '</span></div>';
+      var rcm = S.rc && S.rc.mode, rcf = rcm === 'sc' || rcm === 'scIn' ? '<span class="rcf">SC</span>' : rcm === 'vsc' || rcm === 'vscEnd' ? '<span class="rcf">VSC</span>' : '';
+      html += '<div class="hd"><span>OKR' + rcf + '</span><span class="num">' + Math.min(S.laps, Math.max(1, (S.order[0].lap || 0) + 1)) + '/' + S.laps + '</span></div>';
       var rows = S.order, n = Math.min(rows.length, G.towerRows);
       var pi = rows.indexOf(p), start = 1;
       if (pi >= n) start = Math.max(1, Math.min(rows.length - (n - 1), pi - Math.floor(n / 2)));
@@ -722,19 +801,21 @@
       for (var r = 0; r < n; r++) {
         var ri = r === 0 ? 0 : start + r - 1; if (ri >= rows.length) break;
         var c2 = rows[ri];
-        var gap;
-        if (ri === 0) gap = S.state === 'lights' ? '' : 'Lider';
+        var gap, gcls = 'g';
+        if (c2.retired || c2.retiring) { gap = 'DNF'; gcls = 'g dnf'; }
+        else if (c2.inPit) { gap = 'PIT'; gcls = 'g pit'; }
+        else if (ri === 0) gap = S.state === 'lights' ? '' : 'Lider';
         else if (c2.finished && leader.finished) gap = PG.fmtGap(c2.finishTime - leader.finishTime);
         else {
           var lapsBehind = Math.floor((leader.dist - c2.dist) / T.length);
           gap = lapsBehind >= 1 ? '+' + lapsBehind + ' OKR' : S.state === 'lights' ? '' : '+' + PG.gapBetween(S, leader, c2).toFixed(1);
         }
-        html += '<div class="r' + (c2.isPlayer ? ' me' : '') + '"><span class="p">' + (ri + 1) + '</span><span class="c" style="background:' + c2.team.livery.primary + '"></span><span>' + esc(PG.driverCode(c2.driver)) + '</span><span class="g">' + gap + '</span></div>';
+        html += '<div class="r' + (c2.isPlayer ? ' me' : '') + '"><span class="p">' + (ri + 1) + '</span><span class="c" style="background:' + c2.team.livery.primary + '"></span><span>' + esc(PG.driverCode(c2.driver)) + '</span><span class="' + gcls + '">' + gap + '</span></div>';
       }
     } else {
-      html += '<div class="hd"><span>KWALIFIKACJE</span><span class="num">1 OKR</span></div>';
+      html += '<div class="hd"><span>' + esc(G.cfg && G.cfg.qualiName && G.cfg.qualiName !== 'Kwalifikacje' ? 'KWALIFIKACJE ' + G.cfg.qualiName : 'KWALIFIKACJE') + '</span><span class="num">1 OKR</span></div>';
       html += '<div class="r me"><span class="p">–</span><span class="c" style="background:' + p.team.livery.primary + '"></span><span>' + esc(PG.driverCode(p.driver)) + '</span><span class="g">' + (p.started ? PG.fmtTime(S.time - p.lapStart).slice(0, -2) : 'w drodze') + '</span></div>';
-      if (G.cfg && G.cfg.target) html += '<div class="r"><span class="p">P1</span><span class="c" style="background:#a64dff"></span><span>CEL</span><span class="g">' + PG.fmtTime(G.cfg.target) + '</span></div>';
+      if (G.cfg && G.cfg.target) html += '<div class="r"><span class="p">' + (G.cfg.targetLabel === 'AWANS' ? '↑' : 'P1') + '</span><span class="c" style="background:#a64dff"></span><span>' + esc(G.cfg.targetLabel || 'CEL') + '</span><span class="g">' + PG.fmtTime(G.cfg.target) + '</span></div>';
     }
     setHTML(H.tower, html);
   };

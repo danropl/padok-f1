@@ -213,7 +213,7 @@
     var ret = PG.findMark(T, 'Variante del Rettifilo'), par = PG.findMark(T, 'Curva Alboreto (Parabolica)');
     var asc = PG.findMark(T, 'Variante Ascari'), rog = PG.findMark(T, 'Variante della Roggia'), les1 = PG.findMark(T, 'Curva di Lesmo 1');
     // aleja serwisowa po prawej stronie prostej startowej
-    var p0 = wrapI(T.mainFrom + m(40), N), p1 = wrapI(ret - m(180), N);
+    var p0 = T.pit ? T.pit.from : wrapI(T.mainFrom + m(40), N), p1 = T.pit ? T.pit.to : wrapI(ret - m(180), N);
     band(p0, p1, hw + 4.2, hw + 13, 'pitlane');
     band(p0, p1, hw + 3, hw + 4.2, 'wall');
     // budynek boksów z garażami
@@ -455,6 +455,17 @@
       ctx.drawImage(tex, -tex.width / PG.CAR_TEX / 2, -tex.height / PG.CAR_TEX / 2, tex.width / PG.CAR_TEX, tex.height / PG.CAR_TEX);
       if (cr.brake > 0.5 && cr.v > 3) { ctx.fillStyle = 'rgba(255,40,40,0.9)'; ctx.fillRect(-2.98, -0.06, 0.12, 0.12); }
       if (S.env.wet) { ctx.fillStyle = (Math.floor(S.clock * 4) % 2) ? 'rgba(255,40,40,0.95)' : 'rgba(120,20,20,0.6)'; ctx.fillRect(-2.98, -0.06, 0.12, 0.12); }
+      ctx.restore();
+    }
+    // samochód bezpieczeństwa
+    var scc = S.rc && S.rc.sc;
+    if (scc && !scc.inPit && Math.abs(scc.x - vx) < Rv && Math.abs(scc.y - vy) < Rv) {
+      ctx.save(); ctx.translate(scc.x, scc.y); ctx.rotate(scc.h);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-2.2, -0.85, 4.8, 2.0);
+      ctx.fillStyle = '#b8bec4'; ctx.beginPath(); ctx.moveTo(-2.3, -0.95); ctx.lineTo(1.9, -0.95); ctx.quadraticCurveTo(2.4, -0.9, 2.4, 0); ctx.quadraticCurveTo(2.4, 0.9, 1.9, 0.95); ctx.lineTo(-2.3, 0.95); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#1b2430'; ctx.fillRect(-1.3, -0.8, 2.1, 1.6);
+      ctx.fillStyle = '#c8e000'; ctx.fillRect(-2.3, -0.95, 4.2, 0.18); ctx.fillRect(-2.3, 0.77, 4.2, 0.18);
+      if (scc.lights) { var ph = Math.floor(S.clock * 6) % 2; ctx.fillStyle = ph ? '#ffb000' : '#5a3a00'; ctx.fillRect(-0.3, -0.55, 0.3, 0.4); ctx.fillStyle = ph ? '#5a3a00' : '#ffb000'; ctx.fillRect(-0.3, 0.15, 0.3, 0.4); }
       ctx.restore();
     }
     // cząsteczki

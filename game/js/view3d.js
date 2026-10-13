@@ -741,7 +741,7 @@
       var lv = new THREE.Color(0x777777);
       try { if (c.team && c.team.livery && c.team.livery.primary) lv.set(c.team.livery.primary); } catch (e) { /* zostaje szary */ }
       self.cars.set(c, {
-        root: root, body: body, lod: lod, models: models, lastV: c.v, acc: 0, pitch: 0, roll: 0,
+        root: root, body: body, lod: lod, models: models, lastV: c.v, acc: 0, pitch: 0, roll: 0, comp: c.compound,
         mk: new Float32Array(16), mon: new Uint8Array(4), mci: new Uint8Array(4), em: new Float32Array(12),
         wallT: -9, hitT: -9, lv: lv, ph: RND() * 100
       });
@@ -787,6 +787,12 @@
       var c = S.cars[ci], rec = this.cars.get(c);
       if (!rec) continue;
       var root = rec.root;
+      // nowe opony po pit stopie
+      if (rec.comp !== c.compound) {
+        rec.comp = c.compound;
+        var tc = PG.TYRES[c.compound] ? PG.TYRES[c.compound].color : '#ffffff';
+        for (var mm = 0; mm < rec.models.length; mm++) { try { if (C3.setCompound) C3.setCompound(rec.models[mm], tc); } catch (e0) { /* nic */ } }
+      }
       root.position.set(c.x, 0, c.y);
       root.rotation.y = -c.h;
       root.visible = !(c.ghost > 0 && Math.floor(c.ghost * 10) % 2) && !c.hidden3d;
@@ -1451,6 +1457,7 @@
       catch (e2) { console.warn('Linia jazdy 3D wyłączona:', e2); this.lineMesh.visible = false; this.lineMesh = null; }
     }
     this.world.setStartLights(o.lights === undefined ? -1 : o.lights);
+    try { this.syncSafetyCar(S, dt); } catch (e4) { if (!this.scErr) { this.scErr = true; console.warn('Samochód bezpieczeństwa 3D:', e4); } }
     this.world.update(dt, this.camera);
     // postprocessing, a przy jakimkolwiek błędzie zwykłe renderowanie
     var done = false, p = this.post;
@@ -1461,6 +1468,57 @@
     if (!done) this.renderer.render(this.scene, this.camera);
   };
 
+  // ---------- samochód bezpieczeństwa: prosty model drogowy z belką świateł ----------
+  function buildSafetyCar() {
+    var g = new THREE.Group(), disp = [];
+    function m(o) { var x = new THREE.MeshStandardMaterial(o); disp.push(x); return x; }
+    function mesh(geo, mat) { disp.push(geo); var me = new THREE.Mesh(geo, mat); me.castShadow = true; me.receiveShadow = true; g.add(me); return me; }
+    var paint = m({ color: 0xb8bec4, roughness: 0.28, metalness: 0.85 }), glass = m({ color: 0x0d1218, roughness: 0.05, metalness: 0.6 });
+    var tyre = m({ color: 0x141416, roughness: 0.9, metalness: 0 }), rim = m({ color: 0x9aa0a6, roughness: 0.3, metalness: 0.9 });
+    var stripe = m({ color: 0xc8e000, roughness: 0.4, metalness: 0.1 });
+    var lampL = m({ color: 0x3a2400, emissive: 0xffa000, emissiveIntensity: 0, roughness: 0.3 }), lampR = m({ color: 0x3a2400, emissive: 0xffa000, emissiveIntensity: 0, roughness: 0.3 });
+    var head = m({ color: 0xffffff, emissive: 0xfff4e0, emissiveIntensity: 2.5, roughness: 0.2 });
+    var bs = new THREE.Shape();
+    bs.moveTo(-2.3, 0.28); bs.lineTo(-2.32, 0.72); bs.lineTo(-1.7, 0.9); bs.lineTo(1.0, 0.93); bs.lineTo(2.15, 0.7); bs.quadraticCurveTo(2.38, 0.6, 2.36, 0.42); bs.lineTo(2.25, 0.28); bs.closePath();
+    var bg = new THREE.ExtrudeGeometry(bs, { depth: 1.84, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 3, curveSegments: 8 });
+    bg.translate(0, 0, -0.92); mesh(bg, paint);
+    var cs = new THREE.Shape();
+    cs.moveTo(-1.5, 0.9); cs.lineTo(-0.75, 1.26); cs.lineTo(0.3, 1.28); cs.lineTo(1.0, 0.93); cs.closePath();
+    var cg = new THREE.ExtrudeGeometry(cs, { depth: 1.5, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 2 });
+    cg.translate(0, 0, -0.75); mesh(cg, glass);
+    var roof = new THREE.BoxGeometry(0.95, 0.04, 1.4); roof.translate(-0.25, 1.3, 0); mesh(roof, paint);
+    [-1, 1].forEach(function (sd) {
+      var st = new THREE.BoxGeometry(4.3, 0.12, 0.02); st.translate(0, 0.55, sd * 1.0); mesh(st, stripe);
+      var hl = new THREE.BoxGeometry(0.06, 0.08, 0.38); hl.translate(2.33, 0.55, sd * 0.62); mesh(hl, head);
+    });
+    var bar = new THREE.BoxGeometry(0.22, 0.09, 1.1); bar.translate(-0.25, 1.37, 0); mesh(bar, m({ color: 0x15171a, roughness: 0.5 }));
+    var lg = new THREE.BoxGeometry(0.2, 0.08, 0.34);
+    var l1 = new THREE.Mesh(lg, lampL); l1.position.set(-0.25, 1.42, -0.32); g.add(l1);
+    var l2 = new THREE.Mesh(lg, lampR); l2.position.set(-0.25, 1.42, 0.32); g.add(l2);
+    disp.push(lg);
+    var wg = new THREE.CylinderGeometry(0.34, 0.34, 0.26, 20); wg.rotateX(Math.PI / 2);
+    var rg = new THREE.CylinderGeometry(0.22, 0.22, 0.27, 16); rg.rotateX(Math.PI / 2);
+    [[1.45, 0.86], [1.45, -0.86], [-1.5, 0.86], [-1.5, -0.86]].forEach(function (p) {
+      var w = mesh(wg.clone(), tyre); w.position.set(p[0], 0.34, p[1]);
+      var r = mesh(rg.clone(), rim); r.position.set(p[0], 0.34, p[1] * 1.01);
+    });
+    disp.push(wg, rg);
+    g.userData = { lamps: [lampL, lampR], disp: disp };
+    return g;
+  }
+  V.syncSafetyCar = function (S, dt) {
+    var sc = S && S.rc && S.rc.sc, show = !!(sc && !sc.inPit);
+    if (show && !this.scCar) { this.scCar = buildSafetyCar(); this.scene.add(this.scCar); }
+    if (!this.scCar) return;
+    this.scCar.visible = show;
+    if (!show) return;
+    this.scCar.position.set(sc.x, 0, sc.y);
+    this.scCar.rotation.y = -sc.h;
+    var L = this.scCar.userData.lamps, ph = Math.floor(this.time * 6) % 2;
+    L[0].emissiveIntensity = sc.lights ? (ph ? 7 : 0.2) : 0;
+    L[1].emissiveIntensity = sc.lights ? (ph ? 0.2 : 7) : 0;
+  };
+
   V.info = function () { var i = this.renderer.info.render; return { calls: i.calls, tris: i.triangles }; };
 
   V.dispose = function () {
@@ -1469,6 +1527,7 @@
     this.dropCars();
     this.cars.clear();
     [this.dust, this.smoke, this.sparks, this.shards, this.skids].forEach(function (s) { try { if (s) s.dispose(); } catch (e) { /* nic */ } });
+    if (this.scCar) { this.scene.remove(this.scCar); (this.scCar.userData.disp || []).forEach(function (d) { try { d.dispose(); } catch (e) { /* nic */ } }); this.scCar = null; }
     if (this.lineMesh) this.scene.remove(this.lineMesh);
     if (this.lineGeo) this.lineGeo.dispose();
     if (this.lineMat) this.lineMat.dispose();

@@ -353,7 +353,7 @@
     // zużycie opon
     var usage = Math.min(1.5, Math.abs(car.latAcc || 0) / 35 + (brk > 0 ? 0.3 : 0) + car.skid * 1.5);
     var tw = PG.TYRES[car.compound] || PG.TYRES.M;
-    car.wear = Math.min(1, car.wear + dt * 0.00026 * tw.wear * p.wearMul * (0.5 + usage) * (env.wet && car.compound !== 'W' ? 0.7 : 1) * (!env.wet && car.compound === 'W' ? 3 : 1));
+    car.wear = Math.min(1, car.wear + dt * 0.00026 * (env.wearMul || 1) * tw.wear * p.wearMul * (0.5 + usage) * (env.wet && car.compound !== 'W' ? 0.7 : 1) * (!env.wet && car.compound === 'W' ? 3 : 1));
   };
 
   // Kontroler AI
@@ -416,6 +416,7 @@
     }
     if (Math.abs(car.lat) > T.hw + 0.5) target = Math.min(target, 30);
     if (cap < target) target = cap;
+    if (car.rcCap < target) target = car.rcCap; // samochód bezpieczeństwa / VSC
     if (v < target - 0.3) { car.throttle = Math.min(1, (target - v) / 2.5 + 0.4); car.brake = 0; }
     else if (v > target + 0.6) { car.throttle = 0; car.brake = Math.min(1, (v - target) / 4); }
     else { car.throttle = 0.35; car.brake = 0; }
@@ -448,9 +449,9 @@
     var Lc = PG.PHYS.carLen, R = PG.PHYS.carR, n = 0;
     HITS.length = 0;
     for (var i = 0; i < cars.length; i++) {
-      var a = cars[i]; if (a.retired || a.ghost > 0) continue;
+      var a = cars[i]; if (a.retired || a.ghost > 0 || a.inPit) continue;
       for (var j = i + 1; j < cars.length; j++) {
-        var b = cars[j]; if (b.retired || b.ghost > 0) continue;
+        var b = cars[j]; if (b.retired || b.ghost > 0 || b.inPit || (a.remote && b.remote)) continue;
         var dx0 = b.x - a.x, dy0 = b.y - a.y;
         if (dx0 * dx0 + dy0 * dy0 > 100) continue;
         // prędkości przed kontaktem (siła uderzenia do uszkodzeń)
@@ -463,15 +464,18 @@
           var dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
           if (d < 2 * R && d > 0.001) {
             var pen = (2 * R - d) / 2, nx = dx / d, ny = dy / d;
-            a.x -= nx * pen; a.y -= ny * pen; b.x += nx * pen; b.y += ny * pen;
+            // bolid innego gracza (stan z sieci) jest nieruchomą przeszkodą: odsuwa się tylko nasz
+            var ka = b.remote ? 2 : a.remote ? 0 : 1, kb = 2 - ka;
+            a.x -= nx * pen * ka; a.y -= ny * pen * ka; b.x += nx * pen * kb; b.y += ny * pen * kb;
             // wymiana prędkości wzdłużnej
             var ahead = (b.dist > a.dist) ? b : a, behind = ahead === b ? a : b;
             if (behind.v > ahead.v) {
               var dv = behind.v - ahead.v;
-              behind.v -= dv * 0.45; ahead.v += dv * 0.25;
+              if (!behind.remote) behind.v -= dv * (ahead.remote ? 0.6 : 0.45);
+              if (!ahead.remote) ahead.v += dv * (behind.remote ? 0.35 : 0.25);
             }
             var side = (nx * Math.sin(a.h) - ny * Math.cos(a.h));
-            a.h += side * 0.01; b.h -= side * 0.01;
+            if (!a.remote) a.h += side * 0.01; if (!b.remote) b.h -= side * 0.01;
             var f = Math.abs(a.v - b.v) + pen * 4;
             if (f > hf) { hf = f; hx = (ax + bx) / 2; hy = (ay + by) / 2; hnx = nx; hny = ny; hia = ia; hib = ib; }
           }

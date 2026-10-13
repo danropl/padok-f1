@@ -15,7 +15,7 @@
   // Akcje gry → przyciski
   var ACT = {
     drs: [B.r1, B.cross], camera: [B.triangle], look: [B.square], reset: [B.circle], pause: [B.options],
-    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right]
+    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right], box: [B.l1], compUp: [B.up], compDown: [B.down]
   };
 
   function isDualSense(id) {
