@@ -113,6 +113,14 @@
     G.canvas3.hidden = !G.use3D;
     G.rs = 1;
   };
+  // Tor sesji (przebudowa toru, otoczenia i widoku 3D tylko przy zmianie)
+  G.setTrack = function (id) {
+    var def = PG.trackDef ? PG.trackDef(id) : PG.MONZA;
+    if (G.T && G.T.def === def) return;
+    G.T = PG.buildTrack(def); G.R = new PG.Renderer(G.T);
+    G.setup3D(); G.resize();
+    if (G.mode === 'attract') G.startAttract();
+  };
   G.reconfigureGraphics = function () {
     G.setup3D(); G.resize();
     if (!G.use3D) { G.noWebGL = true; G.paused = true; if (PG.UI && PG.UI.noWebGL) PG.UI.noWebGL(); }

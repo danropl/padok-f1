@@ -14,7 +14,7 @@
   function num(x, d) { return (typeof x === 'number' && isFinite(x)) ? x : d; }
   function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
   var SURF = ['asphalt', 'gravel', 'grass', 'kerb', 'runoff'];
-  var DEF_CFG = { laps: 5, weather: 'sun', difficulty: 'normal', ai: true, quali: 'q3', inc: 'rare', wear: 'auto', damage: 'full', max: 8, priv: false };
+  var DEF_CFG = { track: 'monza', laps: 5, weather: 'sun', difficulty: 'normal', ai: true, quali: 'q3', inc: 'rare', wear: 'auto', damage: 'full', max: 8, priv: false };
   var RC_TXT = {
     sc: ['SAMOCHÓD BEZPIECZEŃSTWA', 'Bez wyprzedzania'], vsc: ['WIRTUALNY SAMOCHÓD BEZPIECZEŃSTWA', 'Zwolnij do limitu'],
     vscEnd: ['VSC KOŃCZY SIĘ', 'Przygotuj się do zielonej flagi'], scIn: ['SC ZJEŻDŻA W TYM OKRĄŻENIU', 'Restart na linii mety'], green: ['ZIELONA FLAGA', '']
@@ -190,7 +190,7 @@
     M.advTimer = setTimeout(function () {
       if (!M.L || !M.dir) return;
       var L = M.L;
-      M.dir.advertise({ code: L.code, name: L.name, host: me().name, n: L.players.length, max: L.cfg.max, st: L.st, laps: L.cfg.laps, w: L.cfg.weather, q: L.cfg.quali, priv: L.cfg.priv });
+      M.dir.advertise({ code: L.code, name: L.name, host: me().name, n: L.players.length, max: L.cfg.max, st: L.st, laps: L.cfg.laps, tr: L.cfg.track, w: L.cfg.weather, q: L.cfg.quali, priv: L.cfg.priv });
     }, 400);
   }
   function pushLobby() {
@@ -448,6 +448,7 @@
   function cfgEnv(cfg) { return { wet: cfg.weather === 'rain', weatherGrip: PG.WEATHER[cfg.weather].grip }; }
   function startEvent(spec, cfg) {
     M.cfg = cfg; M.entries = buildEntries(spec);
+    if (G.setTrack) G.setTrack(cfg.track || 'monza');
     M.myEi = M.entries.findIndex(function (e) { return e.owner === me().id; });
     M.phase = 'quali'; M.buf = {}; M.qseg = null; M.qres = null; M.grid = null; M.qSend = null; M.tyreSend = null; M.want = null;
     if (!M.isHost) { if (M.L) M.L.st = 'quali'; UI.mpWait('Kwalifikacje za chwilę…'); return; }
@@ -754,7 +755,7 @@
         var full = l.n >= l.max, open = l.st === 'lobby';
         list.appendChild(h('div', { class: 'card', style: 'cursor:default' },
           h('div', { class: 'row', style: 'justify-content:space-between;flex-wrap:nowrap' }, h('b', { text: String(l.name || l.code) }), h('span', { class: 'pill ' + (open ? 'green' : 'amber'), text: open ? 'w lobby' : 'trwa wyścig' })),
-          h('span', { class: 'muted', style: 'font-size:14px', text: 'Host: ' + l.host + ' · ' + l.n + '/' + l.max + ' graczy · ' + l.laps + ' okr. · ' + (WNAME[l.w] || '') + ' · ' + (QNAME[l.q] || '') }),
+          h('span', { class: 'muted', style: 'font-size:14px', text: 'Host: ' + l.host + ' · ' + l.n + '/' + l.max + ' graczy · ' + (PG.trackDef ? PG.trackDef(l.tr).short : 'Monza') + ' · ' + l.laps + ' okr. · ' + (WNAME[l.w] || '') + ' · ' + (QNAME[l.q] || '') }),
           h('div', { class: 'row' }, h('span', { class: 'pill', text: 'Kod: ' + l.code }), h('button', { type: 'button', class: 'small primary', text: 'Dołącz', disabled: !open || full, onclick: function () { joinCode(l.code); } }))));
       });
     }
@@ -826,6 +827,7 @@
         return h('label', { class: 'field' }, label, U().seg(opts, c[key], function (v) { M.setCfg(key, v); }));
       }
       var setP = h('div', { class: 'col', style: 'gap:8px' }, h('h3', { text: 'Wyścig' }));
+      setP.appendChild(opt('Tor', 'track', (PG.TRACKS || [PG.MONZA]).map(function (t) { return [t.id, t.short || t.name]; })));
       setP.appendChild(opt('Dystans', 'laps', [[3, '3'], [5, '5'], [10, '10'], [15, '15'], [27, '27 · ½'], [53, '53 · pełny']]));
       setP.appendChild(opt('Pogoda', 'weather', [['sun', 'Słońce'], ['cloud', 'Chmury'], ['rain', 'Deszcz']]));
       setP.appendChild(opt('Kwalifikacje', 'quali', [['q3', 'Q1·Q2·Q3'], ['one', '1 okrążenie'], ['none', 'Bez (symulacja)']]));

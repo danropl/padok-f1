@@ -3,12 +3,14 @@ var PG = (typeof window !== 'undefined' ? (window.PG = window.PG || {}) : (globa
 
 // Wersja gry: widoczna w menu; w multiplayer host przyjmuje tylko graczy z tą samą wersją. Zmieniaj przy każdej
 // aktualizacji razem z ?v= w znacznikach <script> w index.html (wtedy przeglądarka nie użyje starych plików z pamięci).
-PG.VERSION = '2026.10.13.3';
+PG.VERSION = '2026.10.13.4';
 
 // Tor Monza: oś toru odczytana z rzeczywistej geometrii (GeoJSON bacinger/f1-circuits, it-1922),
 // przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.
 PG.MONZA = {
+  id: 'monza',
   name: 'Autodromo Nazionale Monza',
+  info: '5,79 km · 11 zakrętów',
   short: 'Monza',
   country: 'IT',
   halfWidth: 6.5,
@@ -29,6 +31,9 @@ PG.MONZA = {
   // dodatkowe wygładzenie zgrubnych danych w zakrętach: [od punktu, do punktu, liczba przejść]
   smooth: [[2, 13, 12], [16, 34, 40], [34, 45, 14], [45, 57, 120], [57, 64, 220], [73, 91, 140], [93, 118, 160]]
 };
+
+// Tory do wyboru (szybki wyścig, multiplayer)
+PG.TRACKS = [PG.MONZA];
 
 PG.POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
