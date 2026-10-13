@@ -1,4 +1,4 @@
-// Monza Grand Prix — geometria toru, linia wyścigowa, profil prędkości.
+// WORLD GP — geometria toru, linia wyścigowa, profil prędkości.
 (function (PG) {
   'use strict';
   var DS = 2; // odstęp próbek w metrach

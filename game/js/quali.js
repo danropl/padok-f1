@@ -1,4 +1,4 @@
-// Monza Grand Prix — kwalifikacje w formacie Q1 / Q2 / Q3: po Q1 odpada stawka powyżej 15. miejsca, po Q2 powyżej 10.,
+// WORLD GP — kwalifikacje w formacie Q1 / Q2 / Q3: po Q1 odpada stawka powyżej 15. miejsca, po Q2 powyżej 10.,
 // Q3 ustala pierwszą dziesiątkę. Czasy AI symulowane z profilu prędkości (z niewielkim przyspieszeniem toru w kolejnych
 // segmentach), czasy graczy z przejechanych okrążeń. Logika bez interfejsu — używa jej ekran weekendu i multiplayer.
 (function (PG) {

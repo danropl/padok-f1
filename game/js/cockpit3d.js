@@ -1,4 +1,4 @@
-// Monza Grand Prix — wnętrze kokpitu w widoku z kokpitu: kierownica z wyświetlaczem, diodami obrotów, przyciskami,
+// WORLD GP — wnętrze kokpitu w widoku z kokpitu: kierownica z wyświetlaczem, diodami obrotów, przyciskami,
 // pokrętłami i łopatkami, dłonie w rękawicach obracające się z kierownicą, przedramiona, obszycie krawędzi kokpitu,
 // kolumna kierownicy i osłona kolan. Model w układzie bolidu (x do przodu, y w górę, z w prawo) — dziecko nadwozia.
 // API: build({ livery, helmet, quality }) → obiekt; update(obj, car, S, dt); setVisible(obj, on); dispose(obj).

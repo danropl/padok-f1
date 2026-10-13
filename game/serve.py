@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Monza Grand Prix: lokalny serwer gry.
+"""WORLD GP: lokalny serwer gry.
 
 W odróżnieniu od `python3 -m http.server` wyłącza pamięć podręczną przeglądarki,
 więc po aktualizacji (git pull) zawsze ładuje się najnowsza wersja gry.
@@ -70,7 +70,7 @@ def main():
         sys.exit(1)
     version = game_version()
     url = 'http://localhost:%d/' % port
-    print('Monza Grand Prix %s działa pod adresem: %s' % (version, url))
+    print('WORLD GP %s działa pod adresem: %s' % (version, url))
     print('Aby zatrzymać grę, zamknij to okno albo naciśnij Ctrl+C.')
     if '--no-browser' not in sys.argv:
         # unikalny adres strony: przeglądarka nie weźmie starej kopii z pamięci podręcznej

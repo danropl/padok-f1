@@ -1,4 +1,4 @@
-// Monza Grand Prix — zapis gry, zespoły własne, tryb kariery.
+// WORLD GP — zapis gry, zespoły własne, tryb kariery.
 (function (PG) {
   'use strict';
   var KEY = 'pixelgp-save-v1';

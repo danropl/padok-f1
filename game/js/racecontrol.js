@@ -1,4 +1,4 @@
-// Monza Grand Prix — dyrekcja wyścigu: awarie i rozbite bolidy AI, wirtualny samochód bezpieczeństwa (VSC),
+// WORLD GP — dyrekcja wyścigu: awarie i rozbite bolidy AI, wirtualny samochód bezpieczeństwa (VSC),
 // samochód bezpieczeństwa (SC) z kolejką za nim i restartem na linii mety, wyłączony DRS.
 // Stan w S.rc; ograniczenia prędkości bolidów w c.rcCap (m/s, Infinity = brak).
 // Na hoście (i w grze jednoosobowej) działa RC.update; RC.caps liczy limity dla bolidów prowadzonych lokalnie.

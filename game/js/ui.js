@@ -1,4 +1,4 @@
-// Monza Grand Prix — ekrany: menu, szybki wyścig, weekend, wyniki, kariera, kreator, ustawienia.
+// WORLD GP — ekrany: menu, szybki wyścig, weekend, wyniki, kariera, kreator, ustawienia.
 (function (PG) {
   'use strict';
   var UI = PG.UI = {};
@@ -116,7 +116,7 @@
     var s = screen('loading', 'solid');
     var bar1 = h('div', { class: 'loadbar' }, h('i'));
     s.appendChild(h('div', { style: 'min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px' },
-      h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'MONZA' }), h('span', { class: 'k2', text: 'GRAND PRIX' }), h('span', { class: 's', text: 'AUTODROMO NAZIONALE' })),
+      h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'WORLD' }), h('span', { class: 'k2', text: 'GP' }), h('span', { class: 's', text: 'AUTODROMO NAZIONALE' })),
       bar1, h('p', { class: 'muted', text: 'Wczytywanie toru i bolidów…' })));
     G.init(function (p) { bar1.firstChild.style.width = Math.round(p * 100) + '%'; }, function () { if (G.noWebGL) UI.noWebGL(); else UI.menu(); });
     document.addEventListener('pointerdown', function () { PG.Audio.init(); }, { once: true });
@@ -126,7 +126,7 @@
   UI.noWebGL = function () {
     var s = screen('nowebgl', 'solid');
     s.appendChild(h('div', { style: 'min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center' },
-      h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'MONZA' }), h('span', { class: 'k2', text: 'GRAND PRIX' })),
+      h('div', { class: 'logo', style: 'align-items:center' }, h('span', { class: 'k', text: 'WORLD' }), h('span', { class: 'k2', text: 'GP' })),
       h('h2', { text: 'Gra wymaga grafiki 3D (WebGL)' }),
       h('p', { class: 'muted', style: 'max-width:560px', text: 'Ta przeglądarka nie udostępnia WebGL albo jest on wyłączony. Otwórz grę w aktualnym Chrome, Edge, Firefox lub Safari i sprawdź, czy przyspieszenie sprzętowe jest włączone (Chrome: Ustawienia → System → „Używaj akceleracji grafiki”).' }),
       h('button', { type: 'button', class: 'primary', text: 'Spróbuj ponownie', onclick: function () { location.reload(); } })));
@@ -140,23 +140,15 @@
     var s = screen('menu', 'dim');
     var car = Store.data.career;
     var w = h('div', { class: 'wrap' });
-    w.appendChild(h('div', { class: 'logo' }, h('span', { class: 'k', text: 'MONZA' }), h('span', { class: 'k2', text: 'GRAND PRIX' }), h('span', { class: 's', text: 'AUTODROMO NAZIONALE · 5,79 KM · 11 ZAKRĘTÓW' })));
+    w.appendChild(h('div', { class: 'logo' }, h('span', { class: 'k', text: 'WORLD' }), h('span', { class: 'k2', text: 'GP' }), h('span', { class: 's', text: 'AUTODROMO NAZIONALE · 5,79 KM · 11 ZAKRĘTÓW' })));
     var btns = h('div', { class: 'menu-btns' });
     if (car) btns.appendChild(h('button', { type: 'button', class: 'primary', onclick: UI.hub }, 'Kontynuuj karierę', h('small', { text: 'Sezon ' + car.season + ' · runda ' + Math.min(car.round + 1, PG.CALENDAR.length) + '/' + PG.CALENDAR.length })));
     btns.appendChild(h('button', { type: 'button', class: car ? '' : 'primary', onclick: function () { car ? UI.careerNewConfirm() : UI.careerNew(); } }, 'Nowa kariera', h('small', { text: 'Kierowca albo własny zespół' })));
     btns.appendChild(h('button', { type: 'button', onclick: UI.quick }, 'Szybki wyścig', h('small', { text: 'Dowolny zespół, pogoda, dystans' })));
     if (UI.multi) btns.appendChild(h('button', { type: 'button', onclick: function () { UI.multi(); } }, 'Multiplayer', h('small', { text: 'Lobby, gra z innymi przez internet' })));
     btns.appendChild(h('button', { type: 'button', onclick: function () { UI.creator('drivers'); } }, 'Kreator', h('small', { text: 'Kierowcy, zespoły, malowania' })));
-    btns.appendChild(h('button', { type: 'button', onclick: UI.settings }, 'Ustawienia', h('small', { text: 'Grafika, asysty, kontroler' })));
+    btns.appendChild(h('button', { type: 'button', onclick: UI.settings }, 'Ustawienia', h('small', { text: 'Grafika, asysty, kontroler, sterowanie' })));
     w.appendChild(btns);
-    var kb = function (t) { return h('kbd', { text: t }); };
-    w.appendChild(h('div', { class: 'keys' },
-      h('div', {}, kb('↑'), ' / ', kb('W'), ' gaz   ', kb('↓'), ' / ', kb('S'), ' hamulec   ', kb('←'), kb('→'), ' skręt'),
-      h('div', {}, kb('E'), ' DRS   ', kb('R'), ' powrót na tor   ', kb('Esc'), ' pauza   ', kb('M'), ' dźwięk'),
-      h('div', {}, kb('C'), ' kamera   ', kb('V'), ' patrz do tyłu'),
-      h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
-      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('Options'), ' pauza'),
-      h('div', {}, 'Na telefonie działa sterowanie dotykowe.')));
     w.appendChild(h('p', { class: 'muted', style: 'font-size:13px', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1. Wersja ' + PG.VERSION + '.' }));
     s.appendChild(w);
   };
@@ -332,6 +324,16 @@
     }); };
     dp.appendChild(h('div', { class: 'row' }, del));
     g2.appendChild(dp);
+
+    // sterowanie
+    var kb = function (t) { return h('kbd', { text: t }); };
+    g2.appendChild(h('div', { class: 'panel col' }, h('h3', { text: 'Sterowanie' }), h('div', { class: 'keys' },
+      h('div', {}, kb('↑'), ' / ', kb('W'), ' gaz   ', kb('↓'), ' / ', kb('S'), ' hamulec   ', kb('←'), kb('→'), ' skręt'),
+      h('div', {}, kb('E'), ' DRS   ', kb('R'), ' powrót na tor   ', kb('Esc'), ' pauza   ', kb('M'), ' dźwięk'),
+      h('div', {}, kb('C'), ' kamera   ', kb('V'), ' patrz do tyłu   ', kb('B'), ' zjazd do boksu   ', kb('1'), '–', kb('4'), ' opony'),
+      h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
+      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('L1'), ' boks   ', kb('Options'), ' pauza'),
+      h('div', {}, 'Na telefonie działa sterowanie dotykowe.'))));
 
     w.appendChild(g2);
     w.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'primary', text: 'Gotowe', onclick: UI.menu })));

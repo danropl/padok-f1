@@ -1,4 +1,4 @@
-// Monza Grand Prix — sieć: lista lobby i sygnalizacja przez Supabase Realtime (obecność + broadcast, publiczne kanały),
+// WORLD GP — sieć: lista lobby i sygnalizacja przez Supabase Realtime (obecność + broadcast, publiczne kanały),
 // dane gry bezpośrednio między przeglądarkami (WebRTC, kanały danych), a gdy połączenie bezpośrednie się nie uda —
 // przekaźnik przez Supabase z mniejszą częstotliwością. Tryb ?mp=local: karty tej samej przeglądarki (BroadcastChannel).
 // API: Net.ready() → Promise, Net.me, Net.directory(onList), Net.room(code, isHost, handlers), Net.newCode().

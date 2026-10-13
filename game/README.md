@@ -1,4 +1,4 @@
-# Monza Grand Prix
+# WORLD GP
 
 Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
 

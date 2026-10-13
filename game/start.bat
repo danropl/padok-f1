@@ -1,5 +1,5 @@
 @echo off
-rem Monza Grand Prix: uruchomienie na Windows (dwuklik).
+rem WORLD GP: uruchomienie na Windows (dwuklik).
 rem Najpierw pobiera najnowsza wersje gry z GitHuba, potem otwiera gre w przegladarce.
 cd /d "%~dp0"
 where git >nul 2>nul

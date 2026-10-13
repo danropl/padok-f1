@@ -1,4 +1,4 @@
-// Monza Grand Prix — kontrolery: pad (Gamepad API, układ Standard z nazwami DualSense),
+// WORLD GP — kontrolery: pad (Gamepad API, układ Standard z nazwami DualSense),
 // wibracje (dual-rumble) oraz opcjonalnie DualSense przez WebHID (adaptacyjne spusty, pasek świetlny).
 (function (PG) {
   'use strict';

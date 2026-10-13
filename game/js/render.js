@@ -1,4 +1,4 @@
-// Monza Grand Prix — dane otoczenia toru dla widoku 3D (trybuny, boksy, padok, drzewa), linia jazdy i minimapa.
+// WORLD GP — dane otoczenia toru dla widoku 3D (trybuny, boksy, padok, drzewa), linia jazdy i minimapa.
 (function (PG) {
   'use strict';
 

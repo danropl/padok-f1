@@ -1,9 +1,9 @@
-// Monza Grand Prix — dane gry: zespoły, kierowcy, tor, punktacja.
+// WORLD GP — dane gry: zespoły, kierowcy, tor, punktacja.
 var PG = (typeof window !== 'undefined' ? (window.PG = window.PG || {}) : (globalThis.PG = globalThis.PG || {}));
 
 // Wersja gry: widoczna w menu; w multiplayer host przyjmuje tylko graczy z tą samą wersją. Zmieniaj przy każdej
 // aktualizacji razem z ?v= w znacznikach <script> w index.html (wtedy przeglądarka nie użyje starych plików z pamięci).
-PG.VERSION = '2026.10.13.2';
+PG.VERSION = '2026.10.13.3';
 
 // Tor Monza: oś toru odczytana z rzeczywistej geometrii (GeoJSON bacinger/f1-circuits, it-1922),
 // przeliczona na metry względem linii mety. Kierunek jazdy zgodny z ruchem wskazówek zegara.

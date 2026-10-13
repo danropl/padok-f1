@@ -1,4 +1,4 @@
-// Monza Grand Prix — sesja wyścigowa: start, okrążenia, sektory, DRS, uszkodzenia, klasyfikacja.
+// WORLD GP — sesja wyścigowa: start, okrążenia, sektory, DRS, uszkodzenia, klasyfikacja.
 (function (PG) {
   'use strict';
 

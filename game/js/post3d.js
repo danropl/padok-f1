@@ -1,4 +1,4 @@
-// Monza Grand Prix — postprocessing 3D (PG.Post3D): scena do bufora HDR (half float, MSAA na WebGL2),
+// WORLD GP — postprocessing 3D (PG.Post3D): scena do bufora HDR (half float, MSAA na WebGL2),
 // bloom (próg z miękkim kolanem, łańcuch mip: zmniejszanie i powiększanie), złożenie na ekran:
 // mapowanie tonów i sRGB dokładnie raz, lekka winieta i korekcja barw.
 // Każdy błąd → ok = false; wywołujący (view3d) renderuje wtedy bezpośrednio przez renderer.render.

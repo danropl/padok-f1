@@ -1,4 +1,4 @@
-// Monza Grand Prix — pit stopy: przejazd aleją serwisową (prowadzony automatycznie, ogranicznik 80 km/h przy
+// WORLD GP — pit stopy: przejazd aleją serwisową (prowadzony automatycznie, ogranicznik 80 km/h przy
 // garażach), postój z wymianą opon i naprawą skrzydeł, strategia AI, zasada dwóch mieszanek na suchym torze.
 // Dane alei: T.pit = { entry, from, limFrom, limTo, to, exit, lane, box, limit, garage0 } (track.js).
 (function (PG) {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monza Grand Prix: uruchomienie na macOS (dwuklik w Finderze) i Linuksie.
+# WORLD GP: uruchomienie na macOS (dwuklik w Finderze) i Linuksie.
 # Najpierw pobiera najnowszą wersję gry z GitHuba, potem otwiera grę w przeglądarce.
 cd "$(dirname "$0")" || exit 1
 if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then

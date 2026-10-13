@@ -1,4 +1,4 @@
-// Monza Grand Prix — bolid F1 w 3D: proceduralny model ery efektu przypowierzchniowego (2022+), tylko rdzeń THREE.
+// WORLD GP — bolid F1 w 3D: proceduralny model ery efektu przypowierzchniowego (2022+), tylko rdzeń THREE.
 // Układ lokalny: początek na ziemi między osiami, przód wzdłuż +X, +Y w górę, ±Z to boki (2D y ↔ lokalne z).
 // API: build, update (v, steer, drs, brake, rain, lock, lockSide, wspin, dmg, ground), pose, setDamage, detach, setCompound,
 // dispose, liveryTexture, clearCache, purge, studioEnv, snapshot, Showroom, Q, WHEELS, PARTS.

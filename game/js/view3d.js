@@ -1,4 +1,4 @@
-// Monza Grand Prix — widok 3D: renderer, kamery, bolidy na torze, efekty (dym opon, pył, iskry, odłamki,
+// WORLD GP — widok 3D: renderer, kamery, bolidy na torze, efekty (dym opon, pył, iskry, odłamki,
 // ślady opon, linia jazdy), postprocessing (PG.Post3D, jeśli jest).
 (function (PG) {
   'use strict';

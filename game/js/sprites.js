@@ -1,4 +1,4 @@
-// Monza Grand Prix — grafika wektorowa do menu i kreatora: bolid F1 z malowaniem (też warstwy malowania modelu 3D), kask, flagi.
+// WORLD GP — grafika wektorowa do menu i kreatora: bolid F1 z malowaniem (też warstwy malowania modelu 3D), kask, flagi.
 (function (PG) {
   'use strict';
 

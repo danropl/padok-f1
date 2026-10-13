@@ -1,4 +1,4 @@
-// Monza Grand Prix — świat 3D toru: niebo, światło i cienie (mapa cieni przy bolidzie + wypalone cienie dalekie),
+// WORLD GP — świat 3D toru: niebo, światło i cienie (mapa cieni przy bolidzie + wypalone cienie dalekie),
 // asfalt z gumą, krawężniki, pobocza, bariery z reklamami, ściany opon, siatki, trybuny z kibicami, boksy, padok,
 // las (instancje), stary owal z mostem, podium, tablice hamowania i DRS, posterunki porządkowych, światła startu.
 // API: scene, sun, sunDir, setFocus(x, z), setWeather(env), setStartLights(n), update(dt, camera), dispose().

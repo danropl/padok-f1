@@ -1,4 +1,4 @@
-// Monza Grand Prix — pętla gry, widok 3D/2D, kamery, sterowanie (klawiatura, dotyk, pad), wibracje, HUD.
+// WORLD GP — pętla gry, widok 3D/2D, kamery, sterowanie (klawiatura, dotyk, pad), wibracje, HUD.
 (function (PG) {
   'use strict';
   var G = PG.Game = {

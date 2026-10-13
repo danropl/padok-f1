@@ -1,4 +1,4 @@
-// Monza Grand Prix — dźwięk silnika i efekty (Web Audio, bez plików).
+// WORLD GP — dźwięk silnika i efekty (Web Audio, bez plików).
 (function (PG) {
   'use strict';
   var A = PG.Audio = { ctx: null, on: true, vol: 0.5, lastCrunch: -9, lastDrs: -9 };

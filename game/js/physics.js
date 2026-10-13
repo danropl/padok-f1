@@ -1,4 +1,4 @@
-// Monza Grand Prix — model jazdy, uszkodzenia i sztuczna inteligencja kierowców.
+// WORLD GP — model jazdy, uszkodzenia i sztuczna inteligencja kierowców.
 (function (PG) {
   'use strict';
 

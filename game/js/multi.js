@@ -1,4 +1,4 @@
-// Monza Grand Prix — multiplayer: lobby (tworzenie, lista, dołączanie kodem lub linkiem), wybór zespołu i kierowcy,
+// WORLD GP — multiplayer: lobby (tworzenie, lista, dołączanie kodem lub linkiem), wybór zespołu i kierowcy,
 // gotowość, ustawienia hosta, kwalifikacje Q1–Q3 online, pola startowe z wyborem opon, wyścig i wyniki.
 // Host prowadzi lobby, AI, dyrekcję wyścigu i klasyfikację; każdy gracz prowadzi fizykę własnego bolidu,
 // a pozostałe bolidy widzi jako „lalki" ze stanem z sieci (interpolacja z opóźnieniem ~0,1 s).
