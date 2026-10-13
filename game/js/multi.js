@@ -125,6 +125,9 @@
     clearTimeout(M.qTimer); clearTimeout(M.gTimer); clearTimeout(M.advTimer);
     M.room = null; M.L = null; M.entries = null; M.isHost = false; M.myEi = -1; M.buf = {}; M.phase = 'none'; M.snap = null; M.evq = [];
     M.q = null; M.qt = null; M.comps = null; M.loaded = null; M.seen = {}; M.missing = {}; M.lastSnap = 0;
+    // synchronizacja etapów: numer ostatniego etapu (ps), weekend (wk), wersja lobby (lv), ostatnie komunikaty hosta
+    M.ps = 0; M.wk = 0; M.lv = 0; M.goMsg = null; M.cur = null; M.syncAt = 0; M.waitAt = 0;
+    M.qSend = null; M.tyreSend = null; M.loadSend = 0; M.want = null; M.wantAt = 0; M.defer = [];
   };
 
   // Utworzenie lobby (host)
@@ -180,7 +183,8 @@
   }
   function pushLobby() {
     if (!M.isHost || !M.room || !M.L) return;
-    M.room.broadcast({ t: 'lobby', L: M.L }, true);
+    M.lv = (M.lv || 0) + 1;
+    M.room.broadcast({ t: 'lobby', L: M.L, lv: M.lv, ps: M.ps }, true);
     advertise();
     if (UI.lobbyRefresh) UI.lobbyRefresh();
   }
@@ -211,6 +215,62 @@
     } else if (M.missing && M.missing.host && t - M.missing.host > 12000 && quiet(M.L.host, 8000)) hostLost('Host rozłączył się');
     if (!M.isHost && M.phase === 'race' && M.lastSnap && t - M.lastSnap > 20000) hostLost('Brak danych od hosta');
   }, 1000);
+
+  // Co sekundę: host nadaje numer bieżącego etapu, klient sprawdza, czy czegoś nie zgubił, i ponawia
+  // własne komunikaty (czas okrążenia, opony, wczytanie wyścigu, miejsce i gotowość), aż host je potwierdzi
+  setInterval(function () {
+    if (!M.room || !M.L) return;
+    var t = now();
+    if (M.isHost) {
+      M.beatT = (M.beatT || 0) + 1;
+      if (M.beatT % 2 === 0) M.room.broadcast({ t: 'ph', ps: M.ps, lv: M.lv, wk: M.wk }, false);
+      return;
+    }
+    // ekran oczekiwania bez postępu — poproś hosta o stan
+    if (M.waitAt && t - M.waitAt > 4000) { M.waitAt = t; requestSync(); }
+    if (M.qSend && M.phase === 'quali' && t - M.qSend.at > 3000) { M.qSend.at = t; M.room.toHost({ t: 'qtime', i: M.myEi, tm: M.qSend.tm, seg: M.qSend.seg }, true); }
+    if (M.tyreSend && M.phase === 'grid' && t - M.tyreSend.at > 3000) { M.tyreSend.at = t; M.room.toHost({ t: 'tyre', i: M.myEi, c: M.tyreSend.c }, true); }
+    if (M.loadSend && M.phase === 'race' && G.S && G.S.state === 'lights' && t - M.loadSend > 2500) { M.loadSend = t; M.room.toHost({ t: 'loaded' }, true); }
+    if (M.want && M.phase === 'lobby' && t - M.wantAt > 3000) {
+      var pl = myPlayer(), w = M.want;
+      if (pl && (pl.team !== w.team || pl.d !== w.d || !!pl.ready !== !!w.ready)) {
+        M.wantAt = t;
+        if (pl.team !== w.team || pl.d !== w.d) M.room.toHost({ t: 'seat', team: w.team, d: w.d, drv: w.drv || null }, true);
+        if (w.ready) M.room.toHost({ t: 'ready', on: true }, true);
+      }
+    }
+  }, 1000);
+  function requestSync() {
+    var t = now();
+    if (!M.room || M.isHost || t - (M.syncAt || 0) < 1500) return;
+    M.syncAt = t;
+    M.room.toHost({ t: 'sync' }, true);
+  }
+  // host: komunikat etapu (start weekendu, segment, wyniki, pola, wyścig, klasyfikacja, powrót do lobby) z numerem
+  function phaseSend(msg) {
+    msg.ps = ++M.ps;
+    if (msg.t === 'go') { M.wk = msg.ps; M.goMsg = msg; M.cur = null; } else M.cur = msg;
+    msg.wk = M.wk;
+    M.room.broadcast(msg, true);
+  }
+  var PHASE = { go: 1, qseg: 1, qres: 1, grid: 1, race: 1, final: 1, tolobby: 1 };
+  // klient: czy przyjąć komunikat etapu (starsze i powtórzone pomija; bez startu tego weekendu — prosi o stan)
+  function acceptPhase(m) {
+    if (!m.ps) return true;
+    if (m.ps <= M.ps) return false;
+    if (m.t !== 'go' && m.t !== 'tolobby' && m.wk !== M.wk) { requestSync(); return false; }
+    M.ps = m.ps;
+    if (m.t === 'go') M.wk = m.wk;
+    return true;
+  }
+  // klient: pełny stan od hosta (odpowiedź na „sync")
+  function applyState(m) {
+    if (m.L && (!m.lv || m.lv >= (M.lv || 0))) { M.L = m.L; M.lv = m.lv || M.lv; if (M.room) M.room.hostId = m.L.host; }
+    if (m.go && (!m.cur || m.cur.t !== 'tolobby')) clientPhase(m.go);
+    if (m.cur) clientPhase(m.cur);
+    if (M.phase === 'none' && M.L) { clearInterval(M.helloTimer); M.phase = 'lobby'; M.ps = Math.max(M.ps, m.ps || 0); UI.lobby(); }
+    else if (M.phase === 'lobby' && UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh();
+  }
 
   function dropPlayer(id, why) {
     var L = M.L; if (!L) return;
@@ -265,7 +325,8 @@
         pushLobby();
       } else if (t === 'ready') { pl.ready = !!m.on && !!pl.team; pushLobby(); }
       else if (t === 'bye' || t === 'leave') dropPlayer(from, 'wyszedł');
-      else if (t === 'qtime') { if (M.qt && M.entries[m.i] && M.entries[m.i].owner === from) { M.qt[m.i] = num(+m.tm, 0); qMaybeClose(); } }
+      else if (t === 'sync') M.room.sendTo(from, { t: 'state', ps: M.ps, lv: M.lv, L: M.L, go: M.goMsg, cur: M.cur }, true);
+      else if (t === 'qtime') { if (M.qt && M.q && m.seg === M.q.seg && M.entries[m.i] && M.entries[m.i].owner === from) { M.qt[m.i] = num(+m.tm, 0); qMaybeClose(); } }
       else if (t === 'tyre') { if (M.comps && M.entries[m.i] && M.entries[m.i].owner === from && PG.TYRES[m.c]) { M.comps[m.i] = m.c; gridMaybeGo(); } }
       else if (t === 'loaded') { if (M.loaded) { M.loaded[from] = 1; loadedCheck(); } }
       else if (t === 'c') { var a = m.a; if (a && M.entries && M.entries[a[0]] && M.entries[a[0]].owner === from) pushBuf(a[0], a); }
@@ -273,19 +334,34 @@
     }
     // klient
     if (t === 'lobby') {
+      if (m.lv && m.lv < (M.lv || 0)) return; // starsza wersja lobby (np. spóźniona przez serwer)
       clearInterval(M.helloTimer);
-      M.L = m.L; if (M.room) M.room.hostId = m.L.host;
-      if (M.phase === 'none' || M.phase === 'lobby') { M.phase = 'lobby'; if (UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh(); else UI.lobby(); }
+      var first = M.phase === 'none';
+      M.L = m.L; M.lv = m.lv || M.lv; if (M.room) M.room.hostId = m.L.host;
+      if (first && m.ps) M.ps = m.ps; // dołączenie: wcześniejsze etapy tego lobby nas nie dotyczą
+      if (first || M.phase === 'lobby') { M.phase = 'lobby'; if (UI.lobbyRefresh && UI.lobbyShown) UI.lobbyRefresh(); else UI.lobby(); }
     } else if (t === 'deny') { M.reset(); if (UI.toast) UI.toast(m.why || 'Odmowa dołączenia'); UI.multi(); }
     else if (t === 'end') hostLost(m.why || 'Lobby zamknięte');
-    else if (t === 'go') startEvent(m.spec, m.cfg);
+    else if (t === 'state') applyState(m);
+    else if (t === 'ph') { if (m.ps > M.ps || (m.lv && m.lv > (M.lv || 0))) requestSync(); }
+    else if (t === 's') {
+      if (m.ps && m.ps > M.ps) requestSync();
+      if (M.phase !== 'race') return;
+      M.snap = m; M.lastSnap = now(); (m.c || []).forEach(function (a) { if (a && a[0] !== M.myEi) pushBuf(a[0], a); });
+    }
+    else if (PHASE[t]) clientPhase(m);
+  }
+  function clientPhase(m) {
+    if (!acceptPhase(m)) return;
+    var t = m.t;
+    M.waitAt = 0;
+    if (t === 'go') startEvent(m.spec, m.cfg);
     else if (t === 'qseg') later(function () { onQseg(m); });
     else if (t === 'qres') later(function () { onQres(m); });
     else if (t === 'grid') later(function () { onGrid(m); });
     else if (t === 'race') { M.defer = []; if (G.mode === 'quali') { M.phase = 'race'; G.finish({ type: 'quali', time: 0, aborted: true }); } onRace(m); }
-    else if (t === 's') { M.snap = m; M.lastSnap = now(); (m.c || []).forEach(function (a) { if (a && a[0] !== M.myEi) pushBuf(a[0], a); }); }
     else if (t === 'final') onFinal(m);
-    else if (t === 'tolobby') { M.phase = 'lobby'; G.startAttract(); UI.lobby(); }
+    else if (t === 'tolobby') { M.phase = 'lobby'; M.qSend = null; M.tyreSend = null; M.loadSend = 0; M.want = null; G.startAttract(); UI.lobby(); }
   }
 
   // Gracz jedzie właśnie okrążenie kwalifikacyjne: ekrany od hosta pokażą się po jego zakończeniu
@@ -307,12 +383,18 @@
       var taken = M.L.players.some(function (p) { return p !== pl && p.team === team && p.d === d; });
       if (!taken) { pl.team = team; pl.d = d; pl.drv = drv || null; pl.ready = false; }
       pushLobby();
-    } else { pl.team = team; pl.d = d; pl.drv = drv || null; pl.ready = false; M.room.toHost({ t: 'seat', team: team, d: d, drv: drv || null }, true); }
+    } else {
+      pl.team = team; pl.d = d; pl.drv = drv || null; pl.ready = false;
+      M.want = { team: team, d: d, drv: drv || null, ready: false }; M.wantAt = now();
+      M.room.toHost({ t: 'seat', team: team, d: d, drv: drv || null }, true);
+    }
   };
   M.setReady = function (on) {
     var pl = myPlayer(); if (!pl || !pl.team) return;
     pl.ready = !!on;
-    if (M.isHost) pushLobby(); else M.room.toHost({ t: 'ready', on: !!on }, true);
+    if (M.isHost) { pushLobby(); return; }
+    M.want = { team: pl.team, d: pl.d, drv: pl.drv || null, ready: !!on }; M.wantAt = now();
+    M.room.toHost({ t: 'ready', on: !!on }, true);
   };
   M.canStart = function () {
     var L = M.L; if (!L || !M.isHost || L.st !== 'lobby') return false;
@@ -329,7 +411,7 @@
       });
     });
     L.st = 'quali'; advertise();
-    M.room.broadcast({ t: 'go', spec: spec, cfg: L.cfg }, true);
+    phaseSend({ t: 'go', spec: spec, cfg: L.cfg });
     startEvent(spec, L.cfg);
   };
 
@@ -337,7 +419,7 @@
   function startEvent(spec, cfg) {
     M.cfg = cfg; M.entries = buildEntries(spec);
     M.myEi = M.entries.findIndex(function (e) { return e.owner === me().id; });
-    M.phase = 'quali'; M.buf = {};
+    M.phase = 'quali'; M.buf = {}; M.qseg = null; M.qres = null; M.grid = null; M.qSend = null; M.tyreSend = null; M.want = null;
     if (!M.isHost) { if (M.L) M.L.st = 'quali'; UI.mpWait('Kwalifikacje za chwilę…'); return; }
     var Q = PG.Quali;
     M.q = Q.create(M.entries, cfg.quali === 'one' ? 'one' : 'q3');
@@ -361,7 +443,7 @@
     var ai = Q.simulate(st, M.entries, G.T, env, M.cfg.difficulty, function (e) { return !!e.owner; });
     M.qt = {}; M.qAi = ai;
     var msg = { t: 'qseg', seg: st.seg, one: st.format === 'one' ? 1 : 0, alive: st.alive.slice(), target: Q.target(st, ai), keep: Q.keepNow(st), dl: 180 };
-    M.room.broadcast(msg, true);
+    phaseSend(msg);
     clearTimeout(M.qTimer); M.qTimer = setTimeout(qClose, (msg.dl + 4) * 1000);
     onQseg(msg);
   }
@@ -379,7 +461,7 @@
     M.qt = null;
     var res = Q.complete(st, times);
     var msg = { t: 'qres', seg: res.seg, one: st.format === 'one' ? 1 : 0, rows: res.rows, keep: res.keep, done: Q.done(st) ? 1 : 0, final: st.final };
-    M.room.broadcast(msg, true);
+    phaseSend(msg);
     onQres(msg);
   }
   M.qAdvance = function () {
@@ -393,15 +475,18 @@
   }
   function onQres(m) {
     M.qres = m;
+    if (M.qSend && M.qSend.seg <= m.seg) M.qSend = null; // host zamknął segment — nie ponawiaj czasu
     if (M.isHost && G.mode === 'quali' && G.S) { M.defer.push(function () { onQres(m); }); return; }
     UI.mpQualiRes(m);
     if (M.isHost) { clearTimeout(M.qAdvTimer); M.qAdvTimer = setTimeout(M.qAdvance, 20000); }
   }
   // czas przejechanego okrążenia (albo symulacja) wysyłany hostowi
-  M.sendQTime = function (tm) {
+  M.sendQTime = function (tm, seg) {
     if (M.myEi < 0) return;
-    if (M.isHost) { if (M.qt) { M.qt[M.myEi] = tm; qMaybeClose(); } }
-    else M.room.toHost({ t: 'qtime', i: M.myEi, tm: tm }, true);
+    if (M.isHost) { if (M.qt && M.q && seg === M.q.seg) { M.qt[M.myEi] = tm; qMaybeClose(); } return; }
+    if (!M.room) return;
+    M.qSend = { tm: tm, seg: seg, at: now() };
+    M.room.toHost({ t: 'qtime', i: M.myEi, tm: tm, seg: seg }, true);
   };
 
   // ---------- pola startowe ----------
@@ -409,7 +494,7 @@
     var order = final.map(function (r) { return r.i; }), times = final.map(function (r) { return r.t; });
     M.comps = {};
     var msg = { t: 'grid', order: order, times: times, segs: final.map(function (r) { return r.seg; }) };
-    M.room.broadcast(msg, true);
+    phaseSend(msg);
     clearTimeout(M.gTimer); M.gTimer = setTimeout(goRace, 40000);
     onGrid(msg);
   }
@@ -420,8 +505,10 @@
   }
   M.sendTyre = function (c) {
     if (M.myEi < 0) return;
-    if (M.isHost) { if (M.comps) { M.comps[M.myEi] = c; gridMaybeGo(); } }
-    else M.room.toHost({ t: 'tyre', i: M.myEi, c: c }, true);
+    if (M.isHost) { if (M.comps) { M.comps[M.myEi] = c; gridMaybeGo(); } return; }
+    if (!M.room) return;
+    M.tyreSend = { c: c, at: now() };
+    M.room.toHost({ t: 'tyre', i: M.myEi, c: c }, true);
   };
   function onGrid(m) {
     M.phase = 'grid'; M.grid = m;
@@ -436,13 +523,14 @@
     M.comps = null;
     M.L.st = 'race'; advertise();
     var msg = { t: 'race', order: M.grid.order, comps: comps };
-    M.room.broadcast(msg, true);
+    phaseSend(msg);
     onRace(msg);
   }
 
   // ---------- wyścig ----------
   function onRace(m) {
     M.phase = 'race'; M.buf = {}; M.snap = null; M.lastSnap = now(); M.evq = []; M.sendT = 0; M.gridPos = m.order.indexOf(M.myEi) + 1;
+    M.tyreSend = null; M.qSend = null;
     var cfg = M.cfg, mine = me().id;
     var entries = m.order.map(function (ei) {
       var e = M.entries[ei];
@@ -458,7 +546,7 @@
       S.holdLights = true; M.loaded = {}; M.loaded[mine] = 1; M.loadT = now();
       loadedCheck();
       setTimeout(function () { if (G.S === S && S.holdLights) { S.holdLights = false; M.loaded = null; } }, 15000);
-    } else M.room.toHost({ t: 'loaded' }, true);
+    } else { M.loadSend = now(); M.room.toHost({ t: 'loaded' }, true); }
     G.msg('WYŚCIG ONLINE', M.isHost ? 'Czekam, aż wszyscy wczytają tor…' : 'Start, gdy wszyscy będą gotowi', '', 3);
   }
   function loadedCheck() {
@@ -512,7 +600,7 @@
         else arr.push(pack(c));
       });
       var sc = S.rc && S.rc.sc;
-      M.room.broadcast({ t: 's', tm: r2(S.time), st: S.state, lo: S.lightsOn, ld: S.leaderDone ? 1 : 0, o: S.order.map(function (c) { return c.ei; }),
+      M.room.broadcast({ t: 's', ps: M.ps, tm: r2(S.time), st: S.state, lo: S.lightsOn, ld: S.leaderDone ? 1 : 0, o: S.order.map(function (c) { return c.ei; }),
         rc: S.rc ? [S.rc.mode, sc ? [r2(sc.x), r2(sc.y), r3(sc.h), r2(sc.v), sc.lights ? 1 : 0, sc.inPit ? 1 : 0] : 0, S.rc.drsOk ? 1 : 0] : 0, c: arr }, false);
     } else {
       if (t - M.sendT < 50 || !S.player) return;
@@ -544,12 +632,16 @@
     M.phase = 'results';
     var res = PG.classify(S);
     var rows = res.map(function (r) { return { ei: r.car.ei, pos: r.pos, time: r3(r.time), gap: r3(r.gap), best: r3(r.best || 0), pen: r.penalty || 0, dnf: r.dnf ? 1 : 0 }; });
-    if (M.room) M.room.broadcast({ t: 'final', rows: rows }, true);
+    if (M.room) phaseSend({ t: 'final', rows: rows });
     if (M.L) { M.L.st = 'results'; advertise(); }
     G.finish({ type: 'race', res: res, fastest: S.fastest });
   }
   function onFinal(m) {
-    var S = G.S; if (!S || M.phase !== 'race') return;
+    var S = G.S;
+    if (!S || M.phase !== 'race' || S.mode !== 'race') {
+      if (!M.isHost) { M.phase = 'results'; UI.mpWait('Wyścig się zakończył. Czekam, aż host wróci do lobby…'); }
+      return;
+    }
     M.phase = 'results';
     var byEi = {}; S.cars.forEach(function (c) { byEi[c.ei] = c; });
     var res = (m.rows || []).filter(function (r) { return byEi[r.ei]; }).map(function (r) {
@@ -566,7 +658,7 @@
     M.phase = 'lobby';
     if (M.isHost) {
       M.L.st = 'lobby'; M.L.players.forEach(function (p) { p.ready = false; });
-      M.room.broadcast({ t: 'tolobby' }, true);
+      phaseSend({ t: 'tolobby' });
       pushLobby();
     }
     G.startAttract(); UI.lobby();
@@ -753,6 +845,7 @@
 
   // Ekran oczekiwania
   UI.mpWait = function (text) {
+    if (!M.isHost) M.waitAt = now();
     var s = U().screen('mpwait', 'dim');
     s.appendChild(h('div', { class: 'wrap', style: 'max-width:520px;margin:0;padding-block:12vh' }, h('div', { class: 'panel col' },
       h('h2', { text: M.L ? M.L.name : 'Multiplayer' }), h('p', { text: text }),
@@ -769,7 +862,7 @@
     var info = h('p', { class: 'muted' });
     p.appendChild(info);
     var me0 = M.entries[M.myEi];
-    function done(tm, how) { if (sent) return; sent = true; M.sendQTime(tm); info.textContent = how + ' Czekam na pozostałych graczy…'; row.innerHTML = ''; }
+    function done(tm, how) { if (sent) return; sent = true; M.sendQTime(tm, m.seg); info.textContent = how + ' Czekam na pozostałych graczy…'; row.innerHTML = ''; }
     var row = h('div', { class: 'row' });
     if (alive && me0) {
       row.appendChild(h('button', { type: 'button', class: 'primary', text: 'Jedź okrążenie', onclick: function () {
@@ -779,7 +872,7 @@
           if (M.phase === 'race') return; // host już wystartował wyścig
           G.startAttract();
           var t = out.aborted || !out.time ? Q.simTime(G.T, me0, cfgEnv(M.cfg), 'normal', m.seg) + 0.8 : out.time;
-          M.sendQTime(t);
+          M.sendQTime(t, m.seg);
           UI.mpQualiSeg(m, { how: out.time ? 'Twój czas: ' + PG.fmtTime(t) + '.' : 'Czas symulowany: ' + PG.fmtTime(t) + '.' });
           runDeferred();
         });
