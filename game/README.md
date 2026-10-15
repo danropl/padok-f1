@@ -4,7 +4,7 @@ Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii,
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
-Pełna dokumentacja ze zrzutami ekranu: [docs/WORLD-GP-dokumentacja.pdf](docs/WORLD-GP-dokumentacja.pdf).
+Pełna dokumentacja ze zrzutami ekranu: [docs/WORLD-GP-dokumentacja.pdf](docs/WORLD-GP-dokumentacja.pdf). Prezentacja: [docs/WORLD-GP-prezentacja.pptx](docs/WORLD-GP-prezentacja.pptx).
 
 ## Uruchomienie
 
