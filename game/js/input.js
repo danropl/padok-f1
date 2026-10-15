@@ -15,7 +15,8 @@
   // Akcje gry → przyciski
   var ACT = {
     drs: [B.r1, B.cross], camera: [B.triangle], look: [B.square], reset: [B.circle], pause: [B.options],
-    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right], box: [B.l1], compUp: [B.up], compDown: [B.down]
+    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right], box: [B.l1], compUp: [B.up], compDown: [B.down],
+    gearUp: [], gearDown: []
   };
 
   function isDualSense(id) {
@@ -126,6 +127,15 @@
   };
 
   // Akcja wciśnięta (trzymana)
+  // Ręczna skrzynia: R1 / L1 to łopatki zmiany biegów, DRS zostaje na ✕, zjazd do boksu na Create albo L3
+  Pad.setManualGears = function (on) {
+    ACT.drs = on ? [B.cross] : [B.r1, B.cross];
+    ACT.box = on ? [B.create, B.l3] : [B.l1];
+    ACT.gearUp = on ? [B.r1] : [];
+    ACT.gearDown = on ? [B.l1] : [];
+    Pad.manualGears = !!on;
+  };
+
   Pad.held = function (a) {
     var l = ACT[a];
     if (!l || !Pad.connected) return false;

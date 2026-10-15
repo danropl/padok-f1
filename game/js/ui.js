@@ -180,6 +180,16 @@
     var st = Store.data.settings;
     return onOff(st[key], function (v) { st[key] = v; Store.save(); if (G.syncAssists) G.syncAssists(); }, key === 'abs' ? ['Włączony', 'Wyłączony'] : key === 'tc' ? ['Włączona', 'Wyłączona'] : ['Włączony', 'Wyłączony']);
   }
+  // Skrzynia biegów: automatyczna albo ręczna (zmienia też trwającą sesję)
+  var GEAR_TXT = 'Ręczna skrzynia: biegi zmieniasz sam (klawiatura X w górę, Z w dół; pad R1 / L1, wtedy DRS jest na ✕, a zjazd do boksu na Create albo L3). Za wysoki bieg osłabia silnik, na końcu biegu działa ogranicznik obrotów, a redukcja przy zbyt dużej prędkości jest blokowana. AI zawsze jeździ z automatem.';
+  function gearSeg() {
+    var st = Store.data.settings;
+    return seg([['auto', 'Automatyczna'], ['manual', 'Ręczna']], st.gearbox === 'manual' ? 'manual' : 'auto', function (v) {
+      st.gearbox = v; Store.save();
+      if (G.syncAssists) G.syncAssists();
+      if (G.applyGearbox) G.applyGearbox();
+    });
+  }
   function lineSeg(onPick) {
     var st = Store.data.settings;
     return seg(LINE_OPTS, G.lineMode ? G.lineMode() : (st.racingLine || 'full'), function (v) { st.racingLine = v; st.brakeHint = v !== 'off'; Store.save(); if (onPick) onPick(v); });
@@ -190,6 +200,7 @@
     return h('div', { class: 'keys', style: 'font-size:14px;line-height:1.95' },
       h('div', {}, kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
       h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('Options'), ' pauza'),
+      h('div', {}, 'Ręczna skrzynia: ', kb('R1'), ' / ', kb('L1'), ' bieg w górę / w dół   ', kb('✕'), ' DRS   ', kb('Create'), ' boks'),
       h('div', {}, 'W menu: ', kb('krzyżak'), ' wybór   ', kb('✕'), ' zatwierdź   ', kb('○'), ' wstecz'));
   }
   function padStatus() {
@@ -233,6 +244,8 @@
     jp.appendChild(h('div', { class: 'field' }, 'Automatyczny DRS', assistSeg('autoDrs')));
     jp.appendChild(h('div', { class: 'field' }, 'ABS', assistSeg('abs')));
     jp.appendChild(h('div', { class: 'field' }, 'Kontrola trakcji', assistSeg('tc')));
+    jp.appendChild(h('div', { class: 'field' }, 'Skrzynia biegów', gearSeg()));
+    jp.appendChild(note(GEAR_TXT));
     jp.appendChild(note('Automatyczny DRS otwiera klapę sam, gdy DRS jest dozwolony w strefie, i zamyka ją przy hamowaniu. Bez ABS zbyt mocne hamowanie blokuje koła: bolid dymi, gorzej skręca i robi płaskie miejsca na oponach. Kontrola trakcji ogranicza buksowanie przy wyjściu z zakrętów. Asysty można zmieniać także w pauzie.'));
     jp.appendChild(h('h3', { text: 'Uszkodzenia', style: 'margin-top:6px' }));
     var dmgNote = note(DMG_TXT[st.damage] || '');
@@ -331,8 +344,10 @@
       h('div', {}, kb('↑'), ' / ', kb('W'), ' gaz   ', kb('↓'), ' / ', kb('S'), ' hamulec   ', kb('←'), kb('→'), ' skręt'),
       h('div', {}, kb('E'), ' DRS   ', kb('R'), ' powrót na tor   ', kb('Esc'), ' pauza   ', kb('M'), ' dźwięk'),
       h('div', {}, kb('C'), ' kamera   ', kb('V'), ' patrz do tyłu   ', kb('B'), ' zjazd do boksu   ', kb('1'), '–', kb('4'), ' opony'),
+      h('div', {}, kb('X'), ' / ', kb('Z'), ' bieg w górę / w dół (ręczna skrzynia)'),
       h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
       h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('L1'), ' boks   ', kb('Options'), ' pauza'),
+      h('div', {}, 'Ręczna skrzynia na padzie: ', kb('R1'), ' / ', kb('L1'), ' biegi   ', kb('✕'), ' DRS   ', kb('Create'), ' / ', kb('L3'), ' boks'),
       h('div', {}, 'Na telefonie działa sterowanie dotykowe.'))));
 
     w.appendChild(g2);
@@ -572,7 +587,7 @@
     side.appendChild(seg(tyreOpts, comp, function (v) { comp = v; }));
     var rule = ctx.weather !== 'rain' && ctx.laps >= 10;
     side.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Miękkie trzymają najlepiej, ale szybko się zużywają. Twarde wytrzymają długo. W deszczu slicki tracą przyczepność.' +
-      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1), opony 1–4 (pad: krzyżak ▲▼).' }));
+      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1, przy ręcznej skrzyni Create), opony 1–4 (pad: krzyżak ▲▼).' }));
     function go(spectate) {
       root.innerHTML = '';
       var entries = times.map(function (x) {
@@ -661,6 +676,7 @@
       h('div', { class: 'field' }, 'Automatyczny DRS', assistSeg('autoDrs')),
       h('div', { class: 'field' }, 'ABS', assistSeg('abs')),
       h('div', { class: 'field' }, 'Kontrola trakcji', assistSeg('tc')),
+      h('div', { class: 'field' }, 'Skrzynia biegów', gearSeg()),
       h('div', { class: 'field' }, 'Linia jazdy', lineSeg()));
     if (PG.Pad && PG.Pad.connected) {
       opt.appendChild(h('div', { class: 'field' }, 'Wibracje pada', onOff(st.haptics !== false, function (v) { st.haptics = v; Store.save(); }, ['Włączone', 'Wyłączone'])));

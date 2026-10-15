@@ -50,6 +50,7 @@
       lapStart: 0, lastLap: 0, bestLap: 0, sectorTimes: [0, 0, 0], curSector: 0, sectorStart: 0, lastSectors: [0, 0, 0],
       compound: o.compound || 'M', wear: 0, drsOpen: false, drsAllowed: false, slip: 1,
       params: o.params, gear: 1, rpm: 4000, skid: 0, surface: 'asphalt', wall: 0,
+      manual: false, mgear: 1, shiftT: 0, limiter: false, // ręczna skrzynia (tylko gracz)
       penalty: 0, jump: false, retired: false, launched: false, react: 0.25,
       ai: o.ai || null, profile: null, offset: 0, offsetTarget: 0, pos: 0,
       latAcc: 0, hold: false, ghost: 0, stuck: 0, launchBoost: 1,
@@ -70,7 +71,7 @@
   PG.placeOnGrid = function (car, T, slot) {
     car.x = slot.x; car.y = slot.y; car.h = slot.h; car.v = 0; car.idx = slot.i; car.lastIdx = slot.i;
     car.lap = 0; car.dist = -(T.N - slot.i) * T.ds; // ujemny dystans przed linią startu
-    car.beta = 0; car.axS = 0;
+    car.beta = 0; car.axS = 0; car.mgear = 1; car.shiftT = 0;
   };
 
   function tyreGrip(car, env) {
@@ -112,6 +113,40 @@
     var g = p.gripMul * tyreGrip(car, env) * dp.gD;
     var dec = (P.brkA0 + P.brkB * p.aeroMul * av * av * 0.5 * (dp.aF + dp.aR)) * g * (p.brakeMul || 1) + p.cd * dp.drag * av * av;
     return (isFinite(dec) && dec > 1) ? dec : 1;
+  };
+
+  // Ręczna skrzynia: ułamek mocy silnika na wybranym biegu.
+  // Pełna moc od 8000 obr./min; niżej silnik słabnie (za wysoki bieg). Ogranicznik obrotów odcina napęd
+  // na końcu biegu, a krótka przerwa przy zmianie w górę też. Jedynka: sprzęgło pozwala ruszyć pełną mocą.
+  function gearPower(car, av) {
+    var g = car.mgear || 1, kmh = av * 3.6, top = GEAR_TOP[g];
+    if (car.shiftT > 0) return 0;
+    if (kmh >= top * 0.995) return 0;
+    if (g === 1) return 1;
+    var rpm = 12500 * kmh / top;
+    return rpm >= 8000 ? 1 : clamp(0.25 + 0.75 * (rpm - 3000) / 5000, 0.25, 1);
+  }
+
+  // Zmiana biegu (ręczna skrzynia). dir: +1 w górę, −1 w dół.
+  // Zwraca 'up' / 'down', 'deny' (redukcja zakręciłaby silnik ponad ogranicznik) albo null (brak biegu).
+  PG.shiftGear = function (car, dir) {
+    if (!car || !car.manual) return null;
+    var g = car.mgear || 1, kmh = Math.abs(car.v) * 3.6;
+    if (dir > 0) {
+      if (g >= GEAR_TOP.length - 1) return null;
+      car.mgear = g + 1; car.shiftT = 0.015;
+      return 'up';
+    }
+    if (g <= 1) return null;
+    if (kmh > GEAR_TOP[g - 1]) return 'deny';
+    car.mgear = g - 1;
+    return 'down';
+  };
+  // Bieg, który wybrałaby skrzynia automatyczna przy prędkości v (m/s)
+  PG.autoGear = function (v) {
+    var kmh = Math.abs(v) * 3.6, g = 1;
+    while (g < 8 && kmh > GEAR_TOP[g] * 0.97) g++;
+    return g;
   };
 
   // Krok fizyki dla jednego bolidu
@@ -196,6 +231,7 @@
       var tracCap = (P.tracA0 + P.tracB * p.aeroMul * v2 * aR) * grip * (car.launchBoost || 1);
       var tracAv = tracCap * combGrip(ulR); // trakcja pozostała przy obecnym skręcie
       var eng = p.power * dp.pw / Math.max(av, 4);
+      if (car.manual && human) eng *= gearPower(car, av);
       var drive;
       if (car.tcOn) {
         // kontrola trakcji: gaz to ułamek dostępnej trakcji
@@ -243,6 +279,9 @@
       else if (v > 0) acc -= 20 * brk;
     }
     acc -= cd * v * av + (v > 0 ? 0.2 : v < 0 ? -0.2 : 0);
+    // ręczna skrzynia: hamowanie silnikiem rośnie z obrotami (niski bieg = mocniej)
+    if (car.manual && human && thr === 0 && v > 5) acc -= 1.6 * clamp((12500 * av * 3.6 / GEAR_TOP[car.mgear || 1] - 4000) / 8500, 0, 1);
+    if (car.shiftT > 0) car.shiftT -= dt;
     acc -= surfDrag * (v > 0 ? 1 : v < 0 ? -1 : 0);
 
     // siły boczne: przód wyznacza tor jazdy (podsterowność), tył może się uślizgnąć (nadsterowność)
@@ -346,10 +385,20 @@
     }
     // biegi i obroty (dźwięk, HUD)
     var kmh = Math.abs(car.v) * 3.6, g = 1;
-    while (g < 8 && kmh > GEAR_TOP[g] * 0.97) g++;
-    car.gear = car.v < -0.5 ? 0 : g;
-    var lo = GEAR_TOP[g - 1] * 0.82, hi = GEAR_TOP[g];
-    car.rpm = Math.min(12900, 4200 + 8300 * Math.max(0, Math.min(1, (kmh - lo) / (hi - lo))) + car.wspin * 2000);
+    if (car.manual && human) {
+      // ręczna skrzynia: obroty wprost z prędkości na wybranym biegu (12 500 obr./min na końcu biegu)
+      var gm = car.mgear || 1, topM = GEAR_TOP[gm], rpmM = 12500 * kmh / topM;
+      if (gm === 1 && kmh < topM * 0.6) rpmM = Math.max(rpmM, 4200 + 6000 * thr); // sprzęgło przy ruszaniu
+      car.gear = car.v < -0.5 ? 0 : gm;
+      car.limiter = kmh >= topM * 0.995;
+      car.rpm = car.limiter ? 12650 + Math.random() * 250 : Math.min(12900, Math.max(4000, rpmM) + car.wspin * 2000);
+    } else {
+      while (g < 8 && kmh > GEAR_TOP[g] * 0.97) g++;
+      car.gear = car.v < -0.5 ? 0 : g;
+      var lo = GEAR_TOP[g - 1] * 0.82, hi = GEAR_TOP[g];
+      car.rpm = Math.min(12900, 4200 + 8300 * Math.max(0, Math.min(1, (kmh - lo) / (hi - lo))) + car.wspin * 2000);
+      car.limiter = false;
+    }
     // zużycie opon
     var usage = Math.min(1.5, Math.abs(car.latAcc || 0) / 35 + (brk > 0 ? 0.3 : 0) + car.skid * 1.5);
     var tw = PG.TYRES[car.compound] || PG.TYRES.M;
@@ -432,6 +481,7 @@
     car.x = T.line.x[i]; car.y = T.line.y[i]; car.h = Math.atan2(T.ty[i], T.tx[i]); car.v = 8; car.steer = 0; car.steerIn = 0;
     car.offset = 0; car.stuck = 0; car.ghost = 2.5;
     car.beta = 0; car.lock = 0; car.wspin = 0; car.axS = 0; car.revT = 0; car.aiLockT = 0;
+    car.mgear = 1; car.shiftT = 0;
   };
 
   PG.inDRS = function (T, idx) {

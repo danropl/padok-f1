@@ -5,7 +5,7 @@
   var DIFF = { easy: 0.865, normal: 0.925, hard: 0.972 };
   PG.DIFF_NAMES = { easy: 'Łatwy', normal: 'Normalny', hard: 'Trudny' };
   var MK = 50; // znaczniki czasu co 50 m (do różnic czasowych)
-  var DEF_ASSISTS = { abs: false, tc: true, autoDrs: true };
+  var DEF_ASSISTS = { abs: false, tc: true, autoDrs: true, manual: false };
   var PARTS = ['fwL', 'fwR', 'rw', 'floor', 'suspFL', 'suspFR', 'suspRL', 'suspRR', 'engine'];
   PG.DMG_PARTS = PARTS;
 
@@ -13,7 +13,7 @@
   function num(x) { return typeof x === 'number' && isFinite(x); }
 
   // entries: [{driver, team, isPlayer, compound}]
-  // o.damage: 'off' | 'visual' | 'full'; o.assists: {abs, tc, autoDrs} (tylko dla gracza)
+  // o.damage: 'off' | 'visual' | 'full'; o.assists: {abs, tc, autoDrs, manual} (tylko dla gracza; manual — ręczna skrzynia)
   PG.createSession = function (o) {
     var T = o.track;
     var env = { wet: o.weather === 'rain', weatherGrip: PG.WEATHER[o.weather || 'sun'].grip, weather: o.weather || 'sun', wearMul: o.wearMul || 1 };
@@ -25,7 +25,7 @@
     };
     S.damage = (o.damage === 'off' || o.damage === 'visual') ? o.damage : 'full';
     var as = o.assists || DEF_ASSISTS;
-    S.assists = { abs: !!as.abs, tc: as.tc !== false, autoDrs: as.autoDrs !== false };
+    S.assists = { abs: !!as.abs, tc: as.tc !== false, autoDrs: as.autoDrs !== false, manual: !!as.manual };
     env.dmgFull = S.damage === 'full';
     var skillBase = DIFF[S.difficulty] || DIFF.normal;
     o.entries.forEach(function (e, k) {
@@ -122,12 +122,16 @@
         var c = cars[i];
         if (c.remote) continue; // stan z sieci
         if (c.retired) { c.v = 0; c.throttle = 0; c.brake = 1; c.drsOpen = false; continue; }
-        if (c.pit && PG.Pit) { PG.Pit.step(c, h, S); continue; } // przejazd aleją serwisową
+        if (c.pit && PG.Pit) { c.manual = false; PG.Pit.step(c, h, S); continue; } // przejazd aleją serwisową (biegi zmienia ogranicznik)
         var aiDrive = !!c.ai && (!c.isPlayer || c.finished || S.autoPlayer);
         // pomoce: AI zawsze z ABS/TC, gracz wg ustawień
         c.human = !aiDrive && !!c.isPlayer;
         c.absOn = !c.human || !!A.abs;
         c.tcOn = !c.human || A.tc !== false;
+        // ręczna skrzynia tylko dla gracza; po włączeniu (także po alei serwisowej) startuje z biegu automatu
+        var man = c.human && !!A.manual;
+        if (man && !c.manual) { c.mgear = Math.max(1, c.gear || 1); c.shiftT = 0; }
+        c.manual = man;
         if (c.retiring && PG.RC) {
           PG.RC.retireControl(c, T, h); c.wantRev = false;
         } else if (aiDrive) {

@@ -36,6 +36,7 @@ Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod
 | `↓` / `S` | hamulec |
 | `←` `→` | skręt |
 | `E` | DRS |
+| `X` / `Z` | bieg w górę / w dół (ręczna skrzynia) |
 | `R` | powrót na tor |
 | `C` | kamera |
 | `V` | patrz do tyłu |
@@ -43,6 +44,16 @@ Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod
 | `M` | dźwięk |
 
 Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕` DRS, `△` kamera, `□` patrz do tyłu, `○` powrót na tor, `Options` pauza. Na telefonie działa sterowanie dotykowe.
+
+### Ręczna skrzynia biegów (opcja)
+
+**Ustawienia → Jazda → Skrzynia biegów: Ręczna** (także w menu pauzy). Domyślnie skrzynia jest automatyczna, a AI zawsze jeździ z automatem.
+
+- Zmiana biegów: klawiatura `X` w górę, `Z` w dół (albo `+` / `−` na klawiaturze numerycznej); pad `R1` w górę, `L1` w dół. Przy ręcznej skrzyni DRS na padzie jest pod `✕`, a zjazd do boksu pod `Create` albo `L3`. Na telefonie pojawiają się przyciski `+` i `−`.
+- Pełna moc jest od ok. 8000 obr./min. Na za wysokim biegu silnik słabnie, a na końcu biegu działa ogranicznik obrotów (bieg na wyświetlaczu robi się niebieski).
+- Redukcja, po której silnik przekroczyłby obroty, jest blokowana. Niższy bieg mocniej hamuje silnikiem.
+- Kto zmienia biegi przy ok. 12 000 obr./min, jest prawie tak szybki jak automat (0–200 km/h: 4,7 s wobec 4,6 s).
+- Aleja serwisowa, powrót na tor (`R`) i przejęcie bolidu przez AI ustawiają bieg automatycznie.
 
 ## Weekend wyścigowy
 

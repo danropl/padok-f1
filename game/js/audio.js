@@ -90,6 +90,19 @@
     s.connect(f); f.connect(g); g.connect(A.master); s.start(); s.stop(c.currentTime + 0.4);
   };
 
+  // Zmiana biegu (ręczna skrzynia): krótki metaliczny klik skrzyni, w dół niższy
+  A.shift = function (dir) {
+    if (!A.ctx || !A.noiseBuf) return;
+    var c = A.ctx, t = c.currentTime;
+    var s = c.createBufferSource(); s.buffer = A.noiseBuf;
+    var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = dir > 0 ? 2200 : 1400; bp.Q.value = 2.5;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    s.connect(bp); bp.connect(g); g.connect(A.master); s.start(t, Math.random() * 1.5); s.stop(t + 0.06);
+  };
+
   // Siłownik DRS: krótki świst hydrauliki i klapnięcie klapy (open = true przy otwarciu)
   A.drs = function (open) {
     if (!A.ctx || !A.noiseBuf) return;

@@ -922,6 +922,7 @@
     // słońce (popołudnie, ok. 38° nad horyzontem) i osie przestrzeni światła (jak lookAt kamery cieni, up = +Y)
     var sunDir = this.sunDir = new THREE.Vector3(-0.55, 0.62, 0.56).normalize();
     var sinE = sunDir.y, horiz = Math.sqrt(sunDir.x * sunDir.x + sunDir.z * sunDir.z), cotE = horiz / sinE;
+    this.cotE = cotE;
     var shDx = -sunDir.x / horiz, shDz = -sunDir.z / horiz; // kierunek cieni na ziemi
     this.lsZ = sunDir.clone();
     this.lsX = new THREE.Vector3(sunDir.z, 0, -sunDir.x).normalize();
@@ -1765,11 +1766,18 @@
       var nearGeo = [];
       TREE_SHAPES.forEach(function (S, k) { for (var vv = 0; vv < NV; vv++) nearGeo.push(keep(treeGeo(S, det, k * 10 + vv))); });
       var farGeo = keep(treeFarGeo());
-      var CH = lo ? 640 : q === 'medium' ? 400 : 320, chunks = {}, keys = [], t;
+      // jakość wysoka: mniejsze komórki (dawniej 320 m) — pełne drzewa i ich cienie obejmują ciaśniej okolicę kamery
+      // (−35 % trójkątów w klatce); średnia i niska bez zmian, tam więcej wywołań rysowania by się nie opłaciło
+      var CH = lo ? 640 : q === 'medium' ? 400 : 160, chunks = {}, keys = [], t;
+      // ziarno losowej wysokości i jasności drzewa: numer w dawnych komórkach (320 / 400 / 640 m),
+      // by las wyglądał tak samo jak przed zmianą rozmiaru komórek
+      var CH0 = lo ? 640 : q === 'medium' ? 400 : 320, seedN = {}, seeds = [];
       for (t = 0; t < list.length; t += step) {
         var tr0 = list[t], key = Math.floor(tr0.x / CH) + ',' + Math.floor(tr0.y / CH), ch0 = chunks[key];
+        var key0 = Math.floor(tr0.x / CH0) + ',' + Math.floor(tr0.y / CH0);
+        seeds[t] = seedN[key0] = (seedN[key0] || 0) + 1;
         if (!ch0) { ch0 = chunks[key] = []; keys.push(key); }
-        ch0.push(tr0);
+        ch0.push(t);
       }
       var mtx = new THREE.Matrix4(), qt = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), cc = new THREE.Color();
       fg.setTransform(1, 0, 0, 1, 0, 0); fg.globalCompositeOperation = 'multiply';
@@ -1777,17 +1785,17 @@
       keys.forEach(function (key2) {
         var Lst = chunks[key2], cnt = [], a, s;
         for (s = 0; s < nearGeo.length; s++) cnt.push(0);
-        for (a = 0; a < Lst.length; a++) cnt[variant(Lst[a])]++;
+        for (a = 0; a < Lst.length; a++) cnt[variant(list[Lst[a]])]++;
         var near = [], idx = cnt.map(function () { return 0; }), minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
         for (s = 0; s < nearGeo.length; s++) if (cnt[s]) near[s] = new THREE.InstancedMesh(nearGeo[s], M.tree, cnt[s]);
         var far = new THREE.InstancedMesh(farGeo, M.treeFar, Lst.length);
         for (a = 0; a < Lst.length; a++) {
-          var tr = Lst[a], vi = variant(tr), sh = (vi / NV) | 0, S = TREE_SHAPES[sh];
-          var hsh = hash2(Math.round(tr.x * 10), Math.round(tr.y * 10)), r = (tr.r || 4) * (0.92 + hsh * 0.16), ry = 1 + (hash2(a, 17) - 0.5) * 0.2;
+          var tr = list[Lst[a]], sa = seeds[Lst[a]] - 1, vi = variant(tr), sh = (vi / NV) | 0, S = TREE_SHAPES[sh];
+          var hsh = hash2(Math.round(tr.x * 10), Math.round(tr.y * 10)), r = (tr.r || 4) * (0.92 + hsh * 0.16), ry = 1 + (hash2(sa, 17) - 0.5) * 0.2;
           qt.setFromAxisAngle(UP, hsh * 6.283);
           cc.setHex(GREENS[(tr.v % 6) | 0] || GREENS[0]);
           // atlas liści jest jasny, ale nie biały: lekkie rozjaśnienie, by barwa korony została jak wcześniej
-          var kc = (0.78 + hash2(a + 5, 23) * 0.4) * 1.22;
+          var kc = (0.78 + hash2(sa + 5, 23) * 0.4) * 1.22;
           if (sh === 1) { cc.r *= 1.12; cc.g *= 1.06; }
           if (sh === 2) { cc.r *= 0.8; cc.b *= 1.15; kc *= 0.85; }
           cc.multiplyScalar(kc);
@@ -1798,10 +1806,11 @@
           if (tr.x < minx) minx = tr.x; if (tr.x > maxx) maxx = tr.x; if (tr.y < minz) minz = tr.y; if (tr.y > maxz) maxz = tr.y;
           fsTree(tr.x, tr.y, Math.max(S.sx, S.sz) * r, S.cy * r * ry, S.sy * r * ry);
         }
-        var rec = { minx: minx - 8, maxx: maxx + 8, minz: minz - 8, maxz: maxz + 8, near: [], far: far, isNear: false };
+        // cast — rzuca cień (tylko komórki w zasięgu mapy cieni, przełączane w update)
+        var rec = { minx: minx - 8, maxx: maxx + 8, minz: minz - 8, maxz: maxz + 8, near: [], far: far, isNear: false, cast: false };
         near.forEach(function (im) {
           if (!im) return;
-          im.visible = false; im.castShadow = shadowsOn; im.receiveShadow = shadowsOn && hi;
+          im.visible = false; im.castShadow = false; im.receiveShadow = shadowsOn && hi;
           im.matrixAutoUpdate = false; im.updateMatrix();
           if (im.computeBoundingSphere) im.computeBoundingSphere();
           scene.add(im); keep(im); rec.near.push(im);
@@ -2047,14 +2056,30 @@
     }
     // las: szczegółowe drzewa tylko w pobliżu kamery
     var C = this.treeChunks, nr = this.treeNear, fr = nr + 60;
+    // cienie rzucają tylko komórki w zasięgu pudełka cieni; dalsze drzewa i tak nie trafiają do mapy cieni,
+    // a rysowane w niej kosztowały prawie tyle, co cały las na ekranie
+    var sh = this.shadowsOn && this.sun, scx = 0, scz = 0, sr2 = 0;
+    // pudełko cieni pada na ziemię ukośnie: wzdłuż kierunku słońca sięga ext / sin(wysokości), w poprzek ext;
+    // do tego długość cienia drzewa (do 30 m wysokości) i zapas
+    if (sh) {
+      var st = this.sun.target.position, ext = this.shadowExt, along = ext * Math.sqrt(1 + this.cotE * this.cotE);
+      scx = st.x; scz = st.z;
+      var sr = Math.sqrt(ext * ext + along * along) + 30 * this.cotE + 12; sr2 = sr * sr;
+    }
     for (var i = 0; i < C.length; i++) {
       var c = C[i];
       var ex = c.minx - cp.x > 0 ? c.minx - cp.x : cp.x - c.maxx > 0 ? cp.x - c.maxx : 0;
       var ez = c.minz - cp.z > 0 ? c.minz - cp.z : cp.z - c.maxz > 0 ? cp.z - c.maxz : 0;
       var d2 = ex * ex + ez * ez, want = c.isNear ? d2 < fr * fr : d2 < nr * nr;
-      if (want !== c.isNear) {
-        c.isNear = want; c.far.visible = !want;
-        for (var k = 0; k < c.near.length; k++) c.near[k].visible = want;
+      var cast = false;
+      if (sh && want) {
+        var sx = c.minx - scx > 0 ? c.minx - scx : scx - c.maxx > 0 ? scx - c.maxx : 0;
+        var sz = c.minz - scz > 0 ? c.minz - scz : scz - c.maxz > 0 ? scz - c.maxz : 0;
+        cast = sx * sx + sz * sz < sr2;
+      }
+      if (want !== c.isNear || cast !== c.cast) {
+        c.isNear = want; c.cast = cast; c.far.visible = !want;
+        for (var k = 0; k < c.near.length; k++) { c.near[k].visible = want; c.near[k].castShadow = cast; }
       }
     }
     // deszcz: każda kropla zawija się osobno

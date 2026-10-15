@@ -873,7 +873,7 @@
       } else {
         right.appendChild(h('button', { type: 'button', class: mine.ready ? '' : 'primary', disabled: !mine.team, text: mine.ready ? 'Gotowy ✓ (cofnij)' : 'Gotowy', onclick: function () { M.setReady(!mine.ready); render(); } }));
       }
-      right.appendChild(U().note('Zespoły bez gracza prowadzi AI (gdy host wybrał pełną stawkę). Wyścig online nie zatrzymuje się na pauzie. Zjazd do boksu: B (pad: L1).'));
+      right.appendChild(U().note('Zespoły bez gracza prowadzi AI (gdy host wybrał pełną stawkę). Wyścig online nie zatrzymuje się na pauzie. Zjazd do boksu: B (pad: L1, przy ręcznej skrzyni Create).'));
       body.appendChild(left); body.appendChild(right);
     }
     UI.lobbyRefresh = render;

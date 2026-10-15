@@ -119,6 +119,7 @@ kbd { font-family: var(--font-ui); font-size: 14px; font-weight: 700; border: 1p
 #dash .spd { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 56px; font-weight: 700; line-height: 0.9; text-align: right; }
 #dash .unit { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.06em; }
 #dash .gear { font-family: var(--font-num); font-size: 56px; font-weight: 700; line-height: 0.9; color: var(--amber); text-align: center; }
+#dash .gear.lim { color: #4aa3ff; } /* ogranicznik obrotów (ręczna skrzynia) */
 #rpm { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; height: 9px; }
 #rpm i { background: #26303c; border-radius: 2px; }
 #rpm i.on.g { background: var(--green); } #rpm i.on.r { background: var(--red); } #rpm i.on.b { background: #4aa3ff; }
@@ -194,6 +195,10 @@ kbd { font-family: var(--font-ui); font-size: 14px; font-weight: 700; border: 1p
 #tG { right: 14px; bottom: max(200px, calc(env(safe-area-inset-bottom, 0px) + 200px)) !important; }
 #tB { right: 98px; }
 #tC { left: 14px; width: 60px !important; height: 44px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 700; bottom: max(200px, calc(env(safe-area-inset-bottom, 0px) + 200px)) !important; }
+#tGu, #tGd { right: 14px; width: 60px !important; height: 44px !important; border-radius: 10px !important; font-size: 24px !important; font-weight: 700; }
+#tGu { bottom: max(410px, calc(env(safe-area-inset-bottom, 0px) + 410px)) !important; }
+#tGd { bottom: max(350px, calc(env(safe-area-inset-bottom, 0px) + 350px)) !important; }
+#touch .tb[hidden] { display: none; }
 #tD { right: 14px; width: 60px !important; height: 44px !important; border-radius: 10px !important; font-size: 15px !important; font-weight: 700; bottom: max(290px, calc(env(safe-area-inset-bottom, 0px) + 290px)) !important; }
 
 /* Kreator malowania */
@@ -258,7 +263,7 @@ canvas.car3d { border-radius: 6px; }
       </div>
       <div id="dash">
         <div><div class="spd num" id="dSpd">0</div><div class="unit">km/h</div></div>
-        <div><div class="gear" id="dGear">N</div><div class="unit" style="text-align:center">bieg</div></div>
+        <div><div class="gear" id="dGear">N</div><div class="unit" id="dGearL" style="text-align:center">bieg</div></div>
         <div id="rpm"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <div class="flags">
           <span class="drsb off" id="drsb" role="status" aria-label="DRS"><span class="wing" aria-hidden="true"><i></i><i></i></span><span class="t">DRS</span><span class="auto">AUTO</span></span>
@@ -276,32 +281,33 @@ canvas.car3d { border-radius: 6px; }
     <div id="touch" hidden>
       <div class="tb" id="tL">◀</div><div class="tb" id="tR">▶</div>
       <div class="tb" id="tG">▲</div><div class="tb" id="tB">▼</div><div class="tb" id="tD">DRS</div><div class="tb" id="tC" aria-label="Zmień kamerę">CAM</div>
+      <div class="tb" id="tGu" aria-label="Bieg w górę" hidden>+</div><div class="tb" id="tGd" aria-label="Bieg w dół" hidden>−</div>
     </div>
   </div>
   <div id="ui"></div>
 </div>
 
-<script src="js/vendor/three.min.js?v=2026.10.13.4"></script>
-<script src="js/data.js?v=2026.10.13.4"></script>
-<script src="js/track.js?v=2026.10.13.4"></script>
-<script src="js/physics.js?v=2026.10.13.4"></script>
-<script src="js/session.js?v=2026.10.13.4"></script>
-<script src="js/quali.js?v=2026.10.13.4"></script>
-<script src="js/pit.js?v=2026.10.13.4"></script>
-<script src="js/racecontrol.js?v=2026.10.13.4"></script>
-<script src="js/sprites.js?v=2026.10.13.4"></script>
-<script src="js/render.js?v=2026.10.13.4"></script>
-<script src="js/audio.js?v=2026.10.13.4"></script>
-<script src="js/career.js?v=2026.10.13.4"></script>
-<script src="js/car3d.js?v=2026.10.13.4"></script>
-<script src="js/cockpit3d.js?v=2026.10.13.4"></script>
-<script src="js/world3d-lite.js?v=2026.10.13.4"></script>
-<script src="js/post3d.js?v=2026.10.13.4"></script>
-<script src="js/view3d.js?v=2026.10.13.4"></script>
-<script src="js/input.js?v=2026.10.13.4"></script>
-<script src="js/game.js?v=2026.10.13.4"></script>
-<script src="js/ui.js?v=2026.10.13.4"></script>
-<script src="js/net.js?v=2026.10.13.4"></script>
-<script src="js/multi.js?v=2026.10.13.4"></script>
+<script src="js/vendor/three.min.js?v=2026.10.15.1"></script>
+<script src="js/data.js?v=2026.10.15.1"></script>
+<script src="js/track.js?v=2026.10.15.1"></script>
+<script src="js/physics.js?v=2026.10.15.1"></script>
+<script src="js/session.js?v=2026.10.15.1"></script>
+<script src="js/quali.js?v=2026.10.15.1"></script>
+<script src="js/pit.js?v=2026.10.15.1"></script>
+<script src="js/racecontrol.js?v=2026.10.15.1"></script>
+<script src="js/sprites.js?v=2026.10.15.1"></script>
+<script src="js/render.js?v=2026.10.15.1"></script>
+<script src="js/audio.js?v=2026.10.15.1"></script>
+<script src="js/career.js?v=2026.10.15.1"></script>
+<script src="js/car3d.js?v=2026.10.15.1"></script>
+<script src="js/cockpit3d.js?v=2026.10.15.1"></script>
+<script src="js/world3d-lite.js?v=2026.10.15.1"></script>
+<script src="js/post3d.js?v=2026.10.15.1"></script>
+<script src="js/view3d.js?v=2026.10.15.1"></script>
+<script src="js/input.js?v=2026.10.15.1"></script>
+<script src="js/game.js?v=2026.10.15.1"></script>
+<script src="js/ui.js?v=2026.10.15.1"></script>
+<script src="js/net.js?v=2026.10.15.1"></script>
+<script src="js/multi.js?v=2026.10.15.1"></script>
 
 </body></html>

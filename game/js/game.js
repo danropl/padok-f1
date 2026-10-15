@@ -12,7 +12,7 @@
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---------- USTAWIENIA: domyślne wartości nowych kluczy (career.js zostaje bez zmian) ----------
-  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true };
+  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto' };
   G.mergeSettings = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     if (!st) return;
@@ -24,18 +24,40 @@
     st.hapticsGain = isFinite(g) ? Math.max(0, Math.min(1, g)) : 0.8;
     delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
     st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
+    if (st.gearbox !== 'manual') st.gearbox = 'auto';
   };
   G.assistOpts = function () {
     var st = PG.Store.data.settings;
-    return { abs: !!st.abs, tc: st.tc !== false, autoDrs: st.autoDrs !== false };
+    return { abs: !!st.abs, tc: st.tc !== false, autoDrs: st.autoDrs !== false, manual: st.gearbox === 'manual' };
   };
   // Zmiana asyst w trakcie sesji (menu pauzy / ustawienia)
   G.syncAssists = function () {
     if (!G.S) return;
     var o = G.assistOpts(), a = G.S.assists;
     if (!a) a = G.S.assists = {};
-    a.abs = o.abs; a.tc = o.tc; a.autoDrs = o.autoDrs;
+    a.abs = o.abs; a.tc = o.tc; a.autoDrs = o.autoDrs; a.manual = o.manual;
     G.drsState = ''; // przerysuj znacznik AUTO
+    G.applyGearbox();
+  };
+  // Ręczna skrzynia: układ przycisków pada, przyciski dotykowe i podpis biegu w HUD
+  G.manualGears = function () { return PG.Store.data.settings.gearbox === 'manual'; };
+  G.applyGearbox = function () {
+    var on = G.manualGears();
+    if (PG.Pad && PG.Pad.setManualGears) PG.Pad.setManualGears(on);
+    var gu = $('tGu'), gd = $('tGd'), gl = $('dGearL');
+    if (gu) gu.hidden = !on;
+    if (gd) gd.hidden = !on;
+    if (gl) gl.textContent = on ? 'bieg · ręczna' : 'bieg';
+  };
+  // Zmiana biegu przez gracza (klawisze X / Z, pad R1 / L1, przyciski dotykowe)
+  G.shift = function (dir) {
+    var S = G.S, p = S && S.player;
+    if (!p || G.paused || G.netMenu || G.spectate || !(G.mode === 'race' || G.mode === 'quali') || !p.manual) return;
+    var r = PG.shiftGear(p, dir);
+    if (r === 'deny') {
+      var t = now();
+      if (!(t - (G.denyT || 0) < 1500)) { G.denyT = t; G.msg('', 'Za duża prędkość na niższy bieg', '', 0.9); }
+    } else if (r && PG.Audio.shift) PG.Audio.shift(dir);
   };
   G.lineMode = function () {
     var m = PG.Store.data.settings.racingLine;
@@ -58,6 +80,7 @@
     G.bindHud();
     G.bindInput();
     G.bindPad();
+    G.applyGearbox();
     G.startAttract();
     requestAnimationFrame(G.frame);
     if (onProgress) onProgress(1);
@@ -186,6 +209,7 @@
     G.setLights(0);
     $('touch').hidden = !G.isTouch();
     G.resetHud();
+    G.applyGearbox();
     // pasek świetlny DualSense w kolorze zespołu
     if (PG.DualSenseHID && p && p.team && p.team.livery) { try { PG.DualSenseHID.setLight(p.team.livery.primary); } catch (e) { /* nic */ } }
     G.msg(cfg.mode === 'quali' ? 'KWALIFIKACJE' : '', cfg.mode === 'quali' ? 'Pomiar startuje na linii mety' : '', '', 3);
@@ -231,6 +255,8 @@
         if (e.code === 'KeyR' && !e.repeat) G.resetPlayer();
         if (e.code === 'KeyC' && !e.repeat && !G.paused) G.cycleCamera(e.shiftKey ? -1 : 1);
         if (e.code === 'KeyB' && !e.repeat && !G.paused) G.toggleBox();
+        if ((e.code === 'KeyX' || e.code === 'NumpadAdd') && !e.repeat) G.shift(1);
+        if ((e.code === 'KeyZ' || e.code === 'NumpadSubtract') && !e.repeat) G.shift(-1);
         var dig = { Digit1: 'S', Digit2: 'M', Digit3: 'H', Digit4: 'W', Numpad1: 'S', Numpad2: 'M', Numpad3: 'H', Numpad4: 'W' }[e.code];
         if (dig && !e.repeat && !G.paused) G.pickComp(dig);
       }
@@ -246,6 +272,12 @@
       var on = function (e) { e.preventDefault(); G.input[map[id]] = true; el.classList.add('on'); PG.Audio.init(); };
       var off = function (e) { e.preventDefault(); G.input[map[id]] = false; el.classList.remove('on'); };
       el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+    });
+    [['tGu', 1], ['tGd', -1]].forEach(function (b) {
+      var el = $(b[0]); if (!el) return;
+      el.addEventListener('pointerdown', function (e) { e.preventDefault(); el.classList.add('on'); G.shift(b[1]); });
+      var off = function (e) { e.preventDefault(); el.classList.remove('on'); };
+      el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
     });
     var tc = $('tC');
     if (tc) tc.addEventListener('pointerdown', function (e) { e.preventDefault(); if (!G.paused) G.cycleCamera(1); });
@@ -301,6 +333,8 @@
           if (P.hit('camera')) G.cycleCamera(1);
           if (P.hit('reset')) G.resetPlayer();
           if (P.hit('box')) G.toggleBox();
+          if (P.hit('gearUp')) G.shift(1);
+          if (P.hit('gearDown')) G.shift(-1);
           if (P.hit('compUp')) G.cycleComp(-1);
           if (P.hit('compDown')) G.cycleComp(1);
           return;
@@ -347,7 +381,7 @@
     var S = G.S, p = S && S.player;
     if (!p || S.mode !== 'race' || !PG.TYRES[k]) return;
     p.pitComp = k;
-    G.msg('', 'Opony na pit stop: ' + PG.TYRES[k].name + (p.pitReq ? '' : ' · B' + (padConnected() ? ' / L1' : '') + ' zgłasza zjazd'), '', 1.8);
+    G.msg('', 'Opony na pit stop: ' + PG.TYRES[k].name + (p.pitReq ? '' : ' · B' + (padConnected() ? (G.manualGears() ? ' / Create' : ' / L1') : '') + ' zgłasza zjazd'), '', 1.8);
   };
   G.cycleComp = function (dir) {
     var S = G.S, p = S && S.player;
@@ -527,7 +561,7 @@
         case 'go': G.setLights(0); $('lights').hidden = true; A.beep(880, 0.35, 'square', 0.16); G.msg('START!', '', '', 1.2); break;
         case 'jump': G.msg('FALSTART', 'Kara: +5 s', '', 2.5); break;
         case 'drsready':
-          G.msg('', S.assists && S.assists.autoDrs ? 'DRS dostępny · otworzy się automatycznie' : 'DRS dostępny · wciśnij E / Shift' + (padConnected() ? ' / R1' : ''), '', 1.6);
+          G.msg('', S.assists && S.assists.autoDrs ? 'DRS dostępny · otworzy się automatycznie' : 'DRS dostępny · wciśnij E / Shift' + (padConnected() ? (G.manualGears() ? ' / ✕' : ' / R1') : ''), '', 1.6);
           break;
         case 'drs': if (e.car === p && A.drs) A.drs(true); break;
         case 'drsclose': if (e.car === p && A.drs) A.drs(false); break;
@@ -557,7 +591,7 @@
             // przypomnienie o obowiązkowej zmianie mieszanki (w tym samym komunikacie)
             var rem = PG.Pit && PG.Pit.ruleActive(S) && !PG.Pit.ruleOk(p) && !p.pitReq && !p.inPit && left > 1 && left <= Math.max(3, Math.round(S.laps * 0.4));
             G.msg(left === 1 ? 'OSTATNIE OKRĄŻENIE' : 'OKRĄŻENIE ' + (p.lap + 1) + '/' + S.laps,
-              rem ? PG.fmtTime(e.t) + ' · Obowiązkowy pit stop: użyj drugiej mieszanki (B' + (padConnected() ? ' / L1' : '') + ')' : PG.fmtTime(e.t), '', rem ? 3 : 2.2);
+              rem ? PG.fmtTime(e.t) + ' · Obowiązkowy pit stop: użyj drugiej mieszanki (B' + (padConnected() ? (G.manualGears() ? ' / Create' : ' / L1') : '') + ')' : PG.fmtTime(e.t), '', rem ? 3 : 2.2);
           }
           break;
         case 'fastest': if (e.car === p) G.msg('NAJSZYBSZE OKRĄŻENIE', PG.fmtTime(e.t), 'purple', 2.5); break;
@@ -701,7 +735,8 @@
     // prędkościomierz
     var kmh = Math.round(Math.abs(p.v) * 3.6);
     setText(H.spd, String(kmh));
-    setText(H.gear, p.gear === 0 ? 'R' : kmh < 2 && p.throttle === 0 ? 'N' : String(p.gear));
+    setText(H.gear, p.gear === 0 ? 'R' : !p.manual && kmh < 2 && p.throttle === 0 ? 'N' : String(p.gear));
+    if (H.gear && H.gear._lim !== !!p.limiter) { H.gear._lim = !!p.limiter; H.gear.classList.toggle('lim', H.gear._lim); }
     var segs = H.rpm.length, on = Math.round((p.rpm - 4200) / 8300 * segs);
     if (on !== G.rpmOn) {
       G.rpmOn = on;
