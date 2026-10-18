@@ -167,36 +167,29 @@
     if (UI.multiAuto && UI.multiAuto()) return; // link z kodem lobby
     var s = screen('menu', 'dim');
     var car = Store.data.career;
-    // Układ: pasek z logo u góry, nad dolną krawędzią główny kafel trybu i siatka pozostałych trybów
+    // Układ jak lista startowa: numerowane tryby pod logo, opis obok nazwy; scena 3D zostaje widoczna po prawej
     var w = h('div', { class: 'menu-layout' });
     w.appendChild(h('header', { class: 'menu-top' },
       h('div', { class: 'logo' }, h('span', { class: 'k', text: 'WORLD' }), h('span', { class: 'k2', text: 'GP' })),
-      h('span', { class: 'pill', text: 'v' + PG.VERSION })));
-    function tile(icon, title, sub, onclick, cls) {
-      return h('button', { type: 'button', class: 'tile' + (cls ? ' ' + cls : ''), onclick: onclick },
-        h('span', { class: 'ti', 'aria-hidden': 'true', html: ICONS[icon] }), h('span', { class: 'tt', text: title }), h('small', { text: sub }));
-    }
-    var hero = car
-      ? tile('flag', 'Kontynuuj karierę', 'Sezon ' + car.season + ' · runda ' + Math.min(car.round + 1, PG.CALENDAR.length) + '/' + PG.CALENDAR.length, UI.hub, 'hero primary')
-      : tile('flag', 'Nowa kariera', 'Kierowca albo własny zespół. Zbuduj drogę do mistrzostwa.', UI.careerNew, 'hero primary');
-    var tiles = h('div', { class: 'menu-tiles' });
-    if (car) tiles.appendChild(tile('plus', 'Nowa kariera', 'Kierowca albo własny zespół', UI.careerNewConfirm));
-    tiles.appendChild(tile('bolt', 'Szybki wyścig', 'Tor, zespół, pogoda, dystans', function () { UI.trackPick(UI.quick, UI.menu); }));
-    if (UI.multi) tiles.appendChild(tile('net', 'Multiplayer', 'Lobby, gra z innymi przez internet', function () { UI.multi(); }));
-    tiles.appendChild(tile('brush', 'Kreator', 'Kierowcy, zespoły, malowania', function () { UI.creator('drivers'); }));
-    tiles.appendChild(tile('gear', 'Ustawienia', 'Grafika, asysty, kontroler', UI.settings));
-    w.appendChild(h('nav', { class: 'menu-main', 'aria-label': 'Tryby gry' }, hero, tiles));
-    w.appendChild(h('p', { class: 'muted menu-foot', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1. Wersja ' + PG.VERSION + '.' }));
+      h('span', { class: 'ver num', text: 'v' + PG.VERSION })));
+    var items = [];
+    if (car) items.push(['Kontynuuj karierę', 'Sezon ' + car.season + ' · runda ' + Math.min(car.round + 1, PG.CALENDAR.length) + '/' + PG.CALENDAR.length, UI.hub]);
+    items.push(['Nowa kariera', 'Kierowca albo własny zespół', car ? UI.careerNewConfirm : UI.careerNew]);
+    items.push(['Szybki wyścig', 'Tor, zespół, pogoda, dystans', function () { UI.trackPick(UI.quick, UI.menu); }]);
+    if (UI.multi) items.push(['Multiplayer', 'Lobby, gra z innymi przez internet', function () { UI.multi(); }]);
+    items.push(['Kreator', 'Kierowcy, zespoły, malowania', function () { UI.creator('drivers'); }]);
+    items.push(['Ustawienia', 'Grafika, asysty, kontroler', UI.settings]);
+    var list = h('nav', { class: 'menu-list', 'aria-label': 'Tryby gry' });
+    items.forEach(function (it, k) {
+      list.appendChild(h('button', { type: 'button', class: 'mi' + (k === 0 ? ' primary' : ''), onclick: it[2] },
+        h('span', { class: 'n num', 'aria-hidden': 'true', text: (k < 9 ? '0' : '') + (k + 1) }), h('span', { class: 'tt', text: it[0] }), h('small', { text: it[1] })));
+    });
+    w.appendChild(list);
+    w.appendChild(h('p', { class: 'muted menu-foot', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.' }));
     s.appendChild(w);
   };
   // Ikony (inline SVG, kolor z currentColor)
   var ICONS = {
-    flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/><path d="M9 4v8M13 4v8M5 8h12"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
-    bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
-    net: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="9" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5M14.5 14.7c.8-.4 1.6-.7 2.5-.7 2 0 3.6 1.2 4.3 3.8"/></svg>',
-    brush: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4.5l5 5L10 19H5v-5z"/><path d="M12.5 6.5l5 5"/></svg>',
-    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
     display: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
     wheel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M3.5 10.5l6.6 1M20.5 10.5l-6.6 1M12 14v7"/></svg>',
     pad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 7h11a4 4 0 0 1 3.9 3.2l1 5.3a2.6 2.6 0 0 1-4.6 2.1L16 15.5H8l-1.8 2.1a2.6 2.6 0 0 1-4.6-2.1l1-5.3A4 4 0 0 1 6.5 7z"/><path d="M7.5 10v3M6 11.5h3"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="12.5" r=".6" fill="currentColor"/></svg>',
@@ -558,8 +551,8 @@
     w.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' }, h('div', { class: 'row', style: 'gap:14px;flex-wrap:nowrap' }, h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Menu', title: 'Menu', text: '←', onclick: UI.menu }), h('h2', { text: 'Szybki wyścig' })),
       h('button', { type: 'button', class: 'trackchip', onclick: function () { UI.trackPick(UI.quick, UI.quick); } }, trackOutline(td, 64, 40), h('span', { class: 'col', style: 'gap:0' }, h('small', { class: 'muted', text: 'Tor · zmień' }), h('b', { text: td.name })))));
     var g2 = h('div', { class: 'split-aside' });
-    var left = h('div', { class: 'panel col' }, h('h3', { text: 'Wybierz zespół' }));
-    var grid = h('div', { class: 'grid3' });
+    var left = h('div', { class: 'panel col' }, h('div', { class: 'row', style: 'justify-content:space-between' }, h('h3', { text: 'Wybierz zespół' }), h('span', { class: 'muted', style: 'font-size:13px;letter-spacing:0.08em;text-transform:uppercase', text: 'Osiągi' })));
+    var grid = h('div', { class: 'teamlist' });
     var right = h('div', { class: 'panel col aside' });
     function renderRight() {
       right.innerHTML = '';
@@ -587,8 +580,9 @@
       var card = h('button', { type: 'button', class: 'card' + (t.id === quick.teamId ? ' on' : ''), onclick: function () {
         quick.teamId = t.id; quick.driverIdx = 0;
         Array.prototype.forEach.call(grid.children, function (x) { x.classList.remove('on'); }); card.classList.add('on'); renderRight();
-      } }, teamStripe(t), h('div', { class: 'row', style: 'justify-content:space-between;flex-wrap:nowrap' }, h('b', { text: t.name }), carImg(t.livery, t.drivers[0].helmet, 2)),
-        h('span', { class: 'muted', style: 'font-size:13px', text: 'Osiągi ' + Math.round(PG.teamRating(t)) + (t.custom ? ' · własny' : '') }));
+      } }, h('span', { class: 'livtag', 'aria-hidden': 'true', style: '--c1:' + t.livery.primary + ';--c2:' + t.livery.secondary + ';--c3:' + t.livery.accent }),
+        h('span', { class: 'col', style: 'gap:0;min-width:0' }, h('b', { text: t.name }), h('span', { class: 'muted', style: 'font-size:13px', text: 'Silnik ' + t.engine + (t.custom ? ' · własny' : '') })),
+        h('span', { class: 'rating num', title: 'Osiągi' }, String(Math.round(PG.teamRating(t)))), carImg(t.livery, t.drivers[0].helmet, 2));
       grid.appendChild(card);
     });
     left.appendChild(grid);
