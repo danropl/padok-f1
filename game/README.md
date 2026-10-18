@@ -105,7 +105,11 @@ Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Fire
 
 ## Grafika 3D
 
-Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczach wokół kamery, asfalt z kruszywem i smugami gumy w strefach hamowania, żwir z otoczaków. W kamerze z kokpitu (`C`) widać szczegółowe wnętrze: kierownicę z wyświetlaczem (bieg, prędkość, czasy, DRS, ERS), diodami obrotów, przyciskami i pokrętłami, dłonie w rękawicach skręcające razem z kierownicą.
+Las złożony z czterech gatunków: szerokie drzewa liściaste (lipa, dąb), liściaste o koronie jajowatej (grab, buk), topole włoskie i świerki. Każde drzewo ma pień rozszerzony przy korzeniach, rozwidlenie na konary i koronę z kilkunastu kłębów liści (gałązki z liśćmi z atlasu tekstur, prześwity, przez które widać gałęzie, ciemniejsze wnętrze i spód korony); świerki mają piętra zwisających gałęzi. Drzewa kołyszą się na wietrze i są rysowane w trzech poziomach szczegółów: pełne blisko kamery (do 110 m na wysokiej jakości), uproszczone dalej (te same kłęby, mniej i większych kart) i najprostsze w oddali (kłąb liści albo sylwetka świerka). Poziom wybierany jest osobno dla każdego drzewa, więc granice są niewidoczne, a cienie rzucają tylko drzewa w zasięgu mapy cieni.
+
+Trawa 3D na poboczach wokół kamery, asfalt z kruszywem i smugami gumy w strefach hamowania, żwir z otoczaków.
+
+W kamerze z kokpitu (`C`) widać wnętrze wzorowane na współczesnym bolidzie F1: kierownicę z dużym wyświetlaczem (bieg, prędkość, czasy, DRS, ERS, opony), rzędem diod obrotów, diodami flag (żółte przy neutralizacji, niebieskie przy DRS), kolorowymi przyciskami (N, +10, BW, PC, +1, PL, OK, BB±), jasnoniebieskimi rolkami pod kciukami i trzema pokrętłami z kolorowymi skalami, gumowe uchwyty i łopatki; dłonie w rękawicach skręcające razem z kierownicą i ręce w kombinezonie zespołu (łokcie zginają się przy skręcie); wannę kokpitu z panelami z wytłoczeniami, jasnoszarą poduszkę przed kolanami, przezroczystą owiewkę z zębami na przedniej krawędzi, panel przełączników i naklejki ostrzegawcze.
 
 ## Pliki
 
@@ -122,8 +126,9 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/career.js` | zapis gry, zespoły własne, tryb kariery |
 | `js/render.js` | rozmieszczenie trybun, boksów, drzew i reklam dla sceny 3D, linia jazdy, minimapa |
 | `js/sprites.js` | ikony bolidów, kasków i flag w menu i kreatorze |
-| `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, drzewa, trawa, kamery, postprocessing |
-| `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, dłonie) |
+| `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, las (poziomy szczegółów), trawa, kamery, postprocessing |
+| `js/trees3d.js` | drzewa 3D: atlas liści i kory, gatunki, daleki LOD, materiał z kołysaniem na wietrze |
+| `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, diody, dłonie i ręce, wanna, poduszka, owiewka) |
 | `js/audio.js` | dźwięk: silnik klasyczny, silniki z paczki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
 | `js/engines.js` | odtwarzanie nagrań silników z paczki F1 25 (synteza ziarnista w AudioWorklecie, zapasowo w wątku głównym) |
 | `js/enginepack.js` | wczytywanie paczki dźwięków F1 25 z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |

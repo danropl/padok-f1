@@ -486,41 +486,8 @@
   function rubberShader(sh) {
     sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#if defined( USE_COLOR )\n\tdiffuseColor.a *= vColor.g;\n#endif');
   }
-  // Drzewa: kolor instancji barwi tylko koronę (atrybut aLeaf), pień zostaje brązowy
-  var TREE_COLOR = [
-    '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )',
-    '\tvColor = vec3( 1.0 );',
-    '#endif',
-    '#ifdef USE_COLOR',
-    '\tvColor *= color;',
-    '#endif',
-    '#ifdef USE_INSTANCING_COLOR',
-    '\tvColor.xyz *= mix( vec3( 1.0 ), instanceColor.xyz, aLeaf );',
-    '#endif'
-  ].join('\n');
-  // Kołysanie liści na wietrze (faza z położenia instancji, wyżej w koronie mocniej)
-  var TREE_WIND = [
-    '#include <begin_vertex>',
-    '#ifdef USE_INSTANCING',
-    '\tvec3 tIp = vec3( instanceMatrix[ 3 ][ 0 ], instanceMatrix[ 3 ][ 1 ], instanceMatrix[ 3 ][ 2 ] );',
-    '\tfloat tPh = tIp.x * 0.11 + tIp.z * 0.07;',
-    '\tfloat tSw = aLeaf * smoothstep( 0.4, 2.6, position.y );',
-    '\ttransformed.x += tSw * ( sin( uWindT * 1.3 + tPh ) * 0.014 + sin( uWindT * 3.4 + tPh * 2.0 + position.y * 3.0 ) * 0.007 );',
-    '\ttransformed.z += tSw * ( cos( uWindT * 1.1 + tPh * 1.3 ) * 0.011 + sin( uWindT * 2.9 + position.x * 4.0 ) * 0.006 );',
-    '#endif'
-  ].join('\n');
-  // Liście i trawa oświetlone „kulistymi" normalnymi: tylna strona karty nie odwraca normalnej (bez ciemnych plam)
+  // Trawa oświetlona „kulistymi" normalnymi: tylna strona karty nie odwraca normalnej (bez ciemnych plam)
   var NO_FLIP = '#include <normal_fragment_begin>\n\tnormal = normalize( vNormal );';
-  function treeMat(mat, U) {
-    mat.onBeforeCompile = function (sh) {
-      sh.uniforms.uWindT = U;
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aLeaf;\nuniform float uWindT;')
-        .replace('#include <color_vertex>', TREE_COLOR)
-        .replace('#include <begin_vertex>', TREE_WIND);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', NO_FLIP);
-    };
-    mat.customProgramCacheKey = function () { return 'pgTree2'; };
-  }
 
   // Tekstura z łańcuchem mipmap, w którym kanał alfa zachowuje pokrycie (liście i trawa nie znikają z odległości).
   // d0: RGBA (Uint8ClampedArray), tło przezroczyste dostaje kolor bg (bez ciemnych obwódek przy filtrowaniu).
@@ -561,65 +528,6 @@
     t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
     t.needsUpdate = true;
     return t;
-  }
-  // Atlas drzew: ćwiartki [u 0–0,5, v 0–0,5] liście szerokie, [0,5–1, 0–0,5] drobne (topola),
-  // [0–0,5, 0,5–1] igły (pinia), [0,5–1, 0,5–1] kora. Liście jasne i prawie bez barwy — kolor nadaje instancja.
-  function texFoliage(S) {
-    var c = makeCanvas(S, S), g = c.getContext('2d'), Q = S / 2, R = rng(71);
-    g.clearRect(0, 0, S, S);
-    function leafRGB(lum, hue) { return 'rgb(' + Math.round(255 * lum * (0.84 + hue)) + ',' + Math.round(255 * lum) + ',' + Math.round(255 * lum * (0.7 - hue * 0.5)) + ')'; }
-    function cluster(ox, oy, nLeaves, lmin, lmax, wk, stretchY) {
-      var cx = ox + Q / 2, cy = oy + Q / 2, k, twigs = 8 + ((R() * 4) | 0);
-      // gałązki od środka
-      g.lineCap = 'round';
-      for (k = 0; k < twigs; k++) {
-        var a0 = R() * PI2, len = Q * (0.2 + R() * 0.18);
-        g.strokeStyle = 'rgba(92,78,58,1)'; g.lineWidth = Math.max(1.2, Q / 170);
-        g.beginPath(); g.moveTo(cx, cy); g.quadraticCurveTo(cx + Math.cos(a0 + 0.3) * len * 0.5, cy + Math.sin(a0 + 0.3) * len * 0.5 * stretchY, cx + Math.cos(a0) * len, cy + Math.sin(a0) * len * stretchY); g.stroke();
-      }
-      // dwie warstwy: ciemniejsze liście w głębi, jaśniejsze na wierzchu
-      for (var layer = 0; layer < 2; layer++) {
-        for (k = 0; k < nLeaves / 2; k++) {
-          var rr = Q * 0.39 * Math.pow(R(), 0.6), an = R() * PI2;
-          var x = cx + Math.cos(an) * rr, y = cy + Math.sin(an) * rr * stretchY;
-          var L = lmin + R() * (lmax - lmin), W = L * wk, rot = an + (R() - 0.5) * 1.8;
-          var lum = layer ? 0.74 + R() * 0.26 : 0.5 + R() * 0.22, hue = (R() - 0.5) * 0.14;
-          g.save(); g.translate(x, y); g.rotate(rot);
-          g.fillStyle = leafRGB(lum, hue);
-          g.beginPath(); g.moveTo(-L / 2, 0); g.quadraticCurveTo(0, -W, L / 2, 0); g.quadraticCurveTo(0, W, -L / 2, 0); g.fill();
-          g.fillStyle = 'rgba(0,0,0,0.16)';
-          g.beginPath(); g.moveTo(-L / 2, 0); g.quadraticCurveTo(0, W, L / 2, 0); g.quadraticCurveTo(0, W * 0.25, -L / 2, 0); g.fill();
-          g.strokeStyle = 'rgba(255,255,235,0.25)'; g.lineWidth = Math.max(0.6, W * 0.14);
-          g.beginPath(); g.moveTo(-L / 2, 0); g.lineTo(L * 0.42, 0); g.stroke();
-          g.restore();
-        }
-      }
-    }
-    function needles(ox, oy) {
-      var cx = ox + Q / 2, cy = oy + Q / 2, tufts = 34;
-      g.lineCap = 'round';
-      for (var t = 0; t < tufts; t++) {
-        var rr = Q * 0.3 * Math.pow(R(), 0.6), an = R() * PI2, tx = cx + Math.cos(an) * rr, ty = cy + Math.sin(an) * rr * 0.8, len = Q * (0.07 + R() * 0.05);
-        g.strokeStyle = 'rgba(86,72,54,1)'; g.lineWidth = Math.max(1, Q / 220);
-        g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke();
-        for (var k = 0; k < 46; k++) {
-          var a = R() * PI2, l = len * (0.55 + R() * 0.45), lum = 0.5 + R() * 0.5;
-          g.strokeStyle = leafRGB(lum, -0.04 + (R() - 0.5) * 0.06); g.lineWidth = Math.max(1, Q / 260);
-          g.beginPath(); g.moveTo(tx, ty); g.lineTo(tx + Math.cos(a) * l, ty + Math.sin(a) * l); g.stroke();
-        }
-      }
-    }
-    cluster(0, 0, 220, Q * 0.07, Q * 0.12, 0.42, 1);
-    cluster(Q, 0, 300, Q * 0.045, Q * 0.075, 0.5, 1.05);
-    needles(0, Q);
-    // kora: pionowe spękania
-    g.fillStyle = '#7d7064'; g.fillRect(Q, Q, Q, Q);
-    for (var k2 = 0; k2 < 260; k2++) {
-      var bx = Q + R() * Q, bw = 1 + R() * Q / 60, lum2 = R();
-      g.fillStyle = lum2 < 0.55 ? 'rgba(40,32,26,' + (0.25 + R() * 0.4).toFixed(2) + ')' : 'rgba(190,180,165,' + (0.12 + R() * 0.2).toFixed(2) + ')';
-      g.fillRect(bx, Q + R() * Q * 0.5, bw, Q * (0.2 + R() * 0.6));
-    }
-    return coverageTexture(g.getImageData(0, 0, S, S).data, S, S, [205, 215, 170], 128);
   }
   // Kępka trawy: źdźbła od podstawy (v = 1) do góry (v = 0), ciemniejsze u nasady
   function texGrassTuft() {
@@ -717,7 +625,7 @@
       cloud: [0.98, 0.5, 1.0], disk: 0, haze: 0.16, fogN: 30, fogF: 850, exp: 1.28, wet: true, envI: 0.55, shStr: 0.4
     }
   };
-  var ENV_MATS = ['grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeFar', 'grassTuft', 'rubber'];
+  var ENV_MATS = ['grass', 'lawn', 'gravel', 'kerb', 'paint', 'chk', 'paddock', 'concrete', 'hoard', 'tyre', 'dark', 'paintV', 'roof', 'crowdA', 'crowdB', 'sign', 'facade', 'tree', 'treeDet', 'treeFar', 'grassTuft', 'rubber'];
 
   // ---------- wsadowe budowanie geometrii (jedna siatka na materiał i komórkę świata) ----------
   var _m3 = new THREE.Matrix3(), _bv = new THREE.Vector3();
@@ -772,123 +680,8 @@
     return g;
   };
 
-  // ---------- drzewa: geometrie wariantów (jednostka = promień korony z 2D) ----------
-  // kind: 0 liściaste okrągłe, 1 topola, 2 pinia; card — bok karty liści
-  var TREE_SHAPES = [
-    { kind: 0, sx: 1.0, sy: 0.85, sz: 1.0, cy: 2.0, th: 1.95, tr: 0.055, card: 0.62 },
-    { kind: 1, sx: 0.55, sy: 1.6, sz: 0.55, cy: 2.25, th: 1.2, tr: 0.045, card: 0.42 },
-    { kind: 2, sx: 1.15, sy: 0.45, sz: 1.15, cy: 2.9, th: 2.85, tr: 0.05, card: 0.72 }
-  ];
-  var SHAPE_OF = [0, 0, 1, 0, 1, 2];
+  // ---------- drzewa: barwy liści z mapy 2D (geometrie, atlas i materiał — js/trees3d.js) ----------
   var GREENS = [0x3b7a35, 0x2f6a2c, 0x4b7f32, 0x356b3d, 0x6f7f2e, 0x2c5e30];
-  function cross3(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
-  function norm3(a) { var l = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
-  // losowy kierunek; up > 0 przesuwa rozkład w górę
-  function randDir(R, up) {
-    var z = R() * 2 - 1, a = R() * PI2, s = Math.sqrt(1 - z * z);
-    return norm3([s * Math.cos(a), z + (up || 0), s * Math.sin(a)]);
-  }
-
-  // Bufor geometrii drzewa: pozycja, normalna, uv (atlas), kolor (AO albo barwa kory), aLeaf (1 = liście barwione instancją)
-  function TreeBuf() { this.p = []; this.n = []; this.t = []; this.c = []; this.l = []; this.ix = []; this.vc = 0; }
-  TreeBuf.prototype.v = function (x, y, z, nx, ny, nz, u, w, r, g, b, leaf) {
-    this.p.push(x, y, z); this.n.push(nx, ny, nz); this.t.push(u, w); this.c.push(r, g, b); this.l.push(leaf);
-    return this.vc++;
-  };
-  // pień albo konar: ścięty stożek od a do b (promienie r0, r1), kora z prawej dolnej ćwiartki atlasu
-  TreeBuf.prototype.limb = function (a, b, r0, r1, seg, col) {
-    var d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], L = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
-    d = [d[0] / L, d[1] / L, d[2] / L];
-    var e1 = norm3(cross3(d, Math.abs(d[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0])), e2 = cross3(e1, d), base = this.vc, s;
-    for (var k = 0; k <= 1; k++) {
-      var c = k ? b : a, r = k ? r1 : r0;
-      for (s = 0; s <= seg; s++) {
-        var an = s / seg * PI2, ca = Math.cos(an), sa = Math.sin(an);
-        var nx = e1[0] * ca + e2[0] * sa, ny = e1[1] * ca + e2[1] * sa, nz = e1[2] * ca + e2[2] * sa;
-        this.v(c[0] + nx * r, c[1] + ny * r, c[2] + nz * r, nx, ny, nz, 0.52 + 0.46 * s / seg, 0.52 + (k ? 0.46 * Math.min(1, L / 2.5) : 0), col[0], col[1], col[2], 0);
-      }
-    }
-    for (s = 0; s < seg; s++) { var p0 = base + s, p1 = base + seg + 1 + s; this.ix.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1); }
-  };
-  // karta liści: środek c, normalna karty nc, bok sz, obrót rot, ćwiartka atlasu (u0, v0);
-  // normalne wierzchołków „kuliste" od środka korony ctr (półosie rad) — korona cieniuje się jak bryła, nie jak płaskie karty
-  TreeBuf.prototype.card = function (c, nc, sz, rot, u0, v0, ctr, rad) {
-    var t1 = norm3(cross3(Math.abs(nc[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], nc)), t2 = cross3(nc, t1), cr = Math.cos(rot), sr = Math.sin(rot);
-    var a1 = [t1[0] * cr + t2[0] * sr, t1[1] * cr + t2[1] * sr, t1[2] * cr + t2[2] * sr];
-    var a2 = [-t1[0] * sr + t2[0] * cr, -t1[1] * sr + t2[1] * cr, -t1[2] * sr + t2[2] * cr];
-    var h = sz / 2, base = this.vc, CO = [[-1, -1, 0, 1], [1, -1, 1, 1], [1, 1, 1, 0], [-1, 1, 0, 0]];
-    for (var k = 0; k < 4; k++) {
-      var q = CO[k], px = c[0] + (a1[0] * q[0] + a2[0] * q[1]) * h, py = c[1] + (a1[1] * q[0] + a2[1] * q[1]) * h, pz = c[2] + (a1[2] * q[0] + a2[2] * q[1]) * h;
-      var rx = (px - ctr[0]) / rad[0], ry = (py - ctr[1]) / rad[1], rz = (pz - ctr[2]) / rad[2], rl = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
-      var nx = rx / rl * 0.8 + nc[0] * 0.2, ny = ry / rl * 0.8 + nc[1] * 0.2 + 0.25, nz = rz / rl * 0.8 + nc[2] * 0.2, nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-      var ao = (0.42 + 0.58 * Math.pow(Math.min(1, rl), 0.9)) * (0.86 + 0.14 * clamp(ry * 0.5 + 0.5, 0, 1));
-      this.v(px, py, pz, nx / nl, ny / nl, nz / nl, u0 + 0.02 + q[2] * 0.46, v0 + 0.02 + q[3] * 0.46, ao, ao, ao, 1);
-    }
-    this.ix.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  TreeBuf.prototype.build = function () {
-    var g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.t, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
-    g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(this.l, 1));
-    g.setIndex(this.ix);
-    g.computeBoundingSphere();
-    this.p = this.n = this.t = this.c = this.l = this.ix = null;
-    return g;
-  };
-  // Drzewo z pniem, konarami i kępami kart liści; det 0 — mniej kart (słabszy sprzęt), 1 — pełne
-  function treeGeo(S, det, seed) {
-    var B = new TreeBuf(), R = rng(1000 + seed * 7919), k, j;
-    var ctr = [0, S.cy, 0], rad = [S.sx, S.sy, S.sz], bark = S.kind === 2 ? [0.5, 0.4, 0.34] : [0.42, 0.4, 0.38], seg = det ? 7 : 5;
-    var lean = [(R() - 0.5) * (S.kind === 2 ? 0.3 : 0.1), 0, (R() - 0.5) * (S.kind === 2 ? 0.3 : 0.1)];
-    var mid = [lean[0] * 0.4, S.th * 0.5, lean[2] * 0.4], top = [lean[0], S.th, lean[2]];
-    B.limb([0, -0.08, 0], mid, S.tr * 1.1, S.tr * 0.85, seg, bark);
-    B.limb(mid, top, S.tr * 0.85, S.tr * 0.5, seg, bark);
-    var nClump = S.kind === 1 ? (det ? 12 : 7) : (det ? 10 : 6), per = det ? (S.kind === 1 ? 7 : 9) : 5;
-    var u0 = S.kind === 1 ? 0.5 : 0, v0 = S.kind === 2 ? 0.5 : 0, cs = S.card, cc;
-    for (k = 0; k < nClump; k++) {
-      // środki kęp: okrągłe — na ~60 % promienia (więcej u góry), topola — wzdłuż osi, pinia — w płaskim dysku
-      if (S.kind === 1) {
-        var t = (k + 0.5) / nClump, an = R() * PI2, rr = 0.1 + 0.32 * Math.sin(Math.PI * Math.min(1, t * 1.15));
-        cc = [Math.cos(an) * rr * S.sx, S.cy + (t * 2 - 1) * S.sy * 0.82, Math.sin(an) * rr * S.sz];
-      } else if (S.kind === 2) {
-        var an2 = k / nClump * PI2 + R() * 0.6, rr2 = k === 0 ? 0 : 0.38 + R() * 0.4;
-        cc = [Math.cos(an2) * rr2 * S.sx, S.cy + (R() - 0.25) * S.sy * 0.5, Math.sin(an2) * rr2 * S.sz];
-      } else {
-        var dd = randDir(R, 0.35), r3 = 0.45 + R() * 0.2;
-        cc = [dd[0] * r3 * S.sx, S.cy + dd[1] * r3 * S.sy, dd[2] * r3 * S.sz];
-      }
-      // konar do kępy (widoczny w prześwitach korony)
-      if (det && S.kind !== 1) {
-        var from = S.th * (S.kind === 2 ? 0.86 + R() * 0.1 : 0.55 + R() * 0.3), f = from / S.th;
-        B.limb([lean[0] * f, from, lean[2] * f], [cc[0] * 0.85, cc[1] - 0.12 * S.sy, cc[2] * 0.85], S.tr * 0.5, S.tr * 0.16, 4, bark);
-      }
-      for (j = 0; j < per; j++) {
-        var off = randDir(R, 0), od = 0.1 + R() * 0.24;
-        var p = [cc[0] + off[0] * od * S.sx, cc[1] + off[1] * od * S.sy * (S.kind === 2 ? 0.45 : 1), cc[2] + off[2] * od * S.sz];
-        var out = norm3([(p[0] - ctr[0]) / rad[0], (p[1] - ctr[1]) / rad[1], (p[2] - ctr[2]) / rad[2]]), rd = randDir(R, 0);
-        var nc = S.kind === 2 ? norm3([rd[0] * 0.55, 1, rd[2] * 0.55]) : norm3([out[0] + rd[0] * 0.9, out[1] + rd[1] * 0.9, out[2] + rd[2] * 0.9]);
-        B.card(p, nc, cs * (0.8 + R() * 0.4), R() * PI2, u0, v0, ctr, rad);
-      }
-    }
-    // wypełnienie środka korony: bez prześwitów na wylot
-    for (k = 0; k < (det ? 6 : 3); k++) {
-      var di = randDir(R, 0);
-      B.card([di[0] * 0.22 * S.sx, S.cy + di[1] * 0.22 * S.sy, di[2] * 0.22 * S.sz], di, cs * 1.15, R() * PI2, u0, v0, ctr, rad);
-    }
-    return B.build();
-  }
-  // daleki LOD: kilkanaście kart w kuli jednostkowej, kształt korony nadaje macierz instancji
-  function treeFarGeo() {
-    var B = new TreeBuf(), R = rng(4242), ctr = [0, 0, 0], rad = [1, 1, 1];
-    for (var k = 0; k < 16; k++) {
-      var d = randDir(R, 0.15);
-      B.card([d[0] * 0.48, d[1] * 0.48, d[2] * 0.48], norm3([d[0] + R() - 0.5, d[1] + R() - 0.5, d[2] + R() - 0.5]), 1.05, R() * PI2, 0, 0, ctr, rad);
-    }
-    return B.build();
-  }
 
   // =====================================================================
   PG.World3DLite = function (T, R2D, opts) {
@@ -901,7 +694,7 @@
     var scene = this.scene = new THREE.Scene();
     this.T = T; this.q = q; this.renderer = renderer;
     this.disposables = [];
-    this.treeChunks = [];
+    this.forest = null;
     this.treeNear = hi ? 380 : q === 'medium' ? 300 : 200;
     this.time = 0; this.wKey = ''; this.envRT = null; this.pmrem = null; this.envOK = false; this.exposure = 1;
     this.sky = null; this.skyMat = null; this.envScene = null; this.rain = null; this.rainPos = null; this.lightMats = [];
@@ -1007,7 +800,12 @@
     TX.gravel = grv ? keep(texOf(grv.col, true, true, aniso)) : null;
     TX.gravelN = grv && !lo ? keep(texOf(grv.nrm, false, true, aniso)) : null;
     mk('streak', function () { return texOf(texStreaks(), false, true, aniso); });
-    mk('foliage', function () { var t = texFoliage(hi ? 1024 : 512); t.anisotropy = Math.min(aniso, 4); return t; });
+    mk('foliage', function () {
+      if (!PG.Trees3D) return null;
+      var ac = PG.Trees3D.paintAtlas(hi ? 512 : 256), ag = ac.getContext('2d');
+      var t = coverageTexture(ag.getImageData(0, 0, ac.width, ac.height).data, ac.width, ac.height, [205, 215, 170], 128);
+      t.anisotropy = Math.min(aniso, 4); return t;
+    });
     mk('tuft', function () { var t = texGrassTuft(); t.anisotropy = Math.min(aniso, 4); return t; });
     mk('kerb', function () { return texOf(texKerb(), true, true, aniso); });
     mk('concrete', function () { return texOf(texConcrete(256), true, true, Math.min(aniso, 4)); });
@@ -1052,13 +850,21 @@
       sign: std({ map: TX.sign || null, roughness: 0.45, metalness: 0 }),
       facade: std({ map: TX.facade || null, vertexColors: true, roughness: 0.6, metalness: 0.05 }),
       tree: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85, metalness: 0 }),
+      treeDet: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.85, metalness: 0 }),
       treeFar: std({ map: TX.foliage || null, alphaTest: TX.foliage ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: 0.9, metalness: 0 }),
       grassTuft: std({ map: TX.tuft || null, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, metalness: 0 })
     };
     ['grass', 'lawn', 'asphalt', 'runoff', 'gravel', 'kerb', 'paint', 'chk', 'paddock'].forEach(function (k) { farShadowMat(M[k], farU); });
     farShadowMat(M.rubber, farU, rubberShader, 'r');
     this.windU = { value: 0 };
-    treeMat(M.tree, this.windU); treeMat(M.treeFar, this.windU);
+    // drzewa: blisko (treeDet), średnio (tree — bez drzew rysowanych blisko), daleko (treeFar — bez bliższych)
+    this.treeLodMid = { value: new THREE.Vector4(0, 0, -1, 0) };
+    this.treeLodFar = { value: new THREE.Vector4(0, 0, -1, 0) };
+    if (PG.Trees3D) {
+      PG.Trees3D.setupMaterial(M.treeDet, this.windU, {});
+      PG.Trees3D.setupMaterial(M.tree, this.windU, { lod: this.treeLodMid });
+      PG.Trees3D.setupMaterial(M.treeFar, this.windU, { far: true, lod: this.treeLodFar });
+    }
 
     // ---------- niebo, światło, mgła ----------
     scene.fog = new THREE.Fog(0xcfdde8, 220, 2700);
@@ -1756,70 +1562,140 @@
       }
     });
 
-    // ---------- las: instancje w komórkach z dwoma poziomami szczegółów ----------
+    // ---------- las: trzy poziomy szczegółów (geometrie i atlas — js/trees3d.js) ----------
+    // Blisko kamery (do detR) pełne drzewa, dalej do treeNear uproszczone (te same kłęby, mniej i większych kart),
+    // dalej kłęby w kuli albo stożek świerka. Listy bliskich i średnich drzew są przepisywane, gdy kamera się
+    // przesunie (bliskie co 3 m, średnie co 20 m); dalekie siatki są stałe (duże komórki), a drzewo rysowane przez
+    // bliższy poziom shader zwija do punktu — każde drzewo jest rysowane dokładnie raz.
     safe('drzewa', function () {
-      var list = [];
+      var T3 = PG.Trees3D, list = [];
+      if (!T3 || !TX.foliage) return;
       if (R2D.treeGrid && R2D.treeGrid.forEach) R2D.treeGrid.forEach(function (arr) { for (var t = 0; t < arr.length; t++) list.push(arr[t]); });
       if (!list.length) return;
-      self.treeCount = list.length;
-      var step = hi ? 1 : q === 'medium' ? 2 : 3, det = hi ? 1 : 0, NV = 2; // NV wariantów każdego kształtu; poniżej wysokiej jakości mniej kart liści
-      var nearGeo = [];
-      TREE_SHAPES.forEach(function (S, k) { for (var vv = 0; vv < NV; vv++) nearGeo.push(keep(treeGeo(S, det, k * 10 + vv))); });
-      var farGeo = keep(treeFarGeo());
-      // jakość wysoka: mniejsze komórki (dawniej 320 m) — pełne drzewa i ich cienie obejmują ciaśniej okolicę kamery
-      // (−35 % trójkątów w klatce); średnia i niska bez zmian, tam więcej wywołań rysowania by się nie opłaciło
-      var CH = lo ? 640 : q === 'medium' ? 400 : 160, chunks = {}, keys = [], t;
-      // ziarno losowej wysokości i jasności drzewa: numer w dawnych komórkach (320 / 400 / 640 m),
-      // by las wyglądał tak samo jak przed zmianą rozmiaru komórek
-      var CH0 = lo ? 640 : q === 'medium' ? 400 : 320, seedN = {}, seeds = [];
-      for (t = 0; t < list.length; t += step) {
-        var tr0 = list[t], key = Math.floor(tr0.x / CH) + ',' + Math.floor(tr0.y / CH), ch0 = chunks[key];
-        var key0 = Math.floor(tr0.x / CH0) + ',' + Math.floor(tr0.y / CH0);
-        seeds[t] = seedN[key0] = (seedN[key0] || 0) + 1;
-        if (!ch0) { ch0 = chunks[key] = []; keys.push(key); }
-        ch0.push(t);
+      var step = hi ? 1 : q === 'medium' ? 2 : 3, NV = 2, NK = T3.SHAPES.length, NVAR = NK * NV;
+      var detR = hi ? 110 : q === 'medium' ? 70 : 0, midR = self.treeNear, k, v, i, t;
+      var detGeo = [], midGeo = [];
+      for (k = 0; k < NK; k++) for (v = 0; v < NV; v++) {
+        if (detR > 0) detGeo.push(keep(T3.nearGeometry(k, v, 2)));
+        midGeo.push(keep(T3.nearGeometry(k, v, lo ? 0 : 1)));
       }
+      var farGeo = [keep(T3.farGeometry(false)), keep(T3.farGeometry(true))];
+      // dane drzew: położenie, wariant, macierz (pień na ziemi) i barwa liści
+      var n = Math.ceil(list.length / step), TXa = new Float32Array(n), TZa = new Float32Array(n), TVa = new Uint8Array(n);
+      var TMa = new Float32Array(n * 16), TCa = new Float32Array(n * 3), cntV = new Int32Array(NVAR);
       var mtx = new THREE.Matrix4(), qt = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), cc = new THREE.Color();
+      var FCH = lo ? 900 : 600, farCells = {}, farKeys = [];
       fg.setTransform(1, 0, 0, 1, 0, 0); fg.globalCompositeOperation = 'multiply';
-      function variant(tr) { var sh = SHAPE_OF[(tr.v % 6) | 0] || 0; return sh * NV + (hash2(Math.round(tr.x * 7), Math.round(tr.y * 7)) < 0.5 ? 0 : 1); }
-      keys.forEach(function (key2) {
-        var Lst = chunks[key2], cnt = [], a, s;
-        for (s = 0; s < nearGeo.length; s++) cnt.push(0);
-        for (a = 0; a < Lst.length; a++) cnt[variant(list[Lst[a]])]++;
-        var near = [], idx = cnt.map(function () { return 0; }), minx = 1e9, maxx = -1e9, minz = 1e9, maxz = -1e9;
-        for (s = 0; s < nearGeo.length; s++) if (cnt[s]) near[s] = new THREE.InstancedMesh(nearGeo[s], M.tree, cnt[s]);
-        var far = new THREE.InstancedMesh(farGeo, M.treeFar, Lst.length);
-        for (a = 0; a < Lst.length; a++) {
-          var tr = list[Lst[a]], sa = seeds[Lst[a]] - 1, vi = variant(tr), sh = (vi / NV) | 0, S = TREE_SHAPES[sh];
-          var hsh = hash2(Math.round(tr.x * 10), Math.round(tr.y * 10)), r = (tr.r || 4) * (0.92 + hsh * 0.16), ry = 1 + (hash2(sa, 17) - 0.5) * 0.2;
-          qt.setFromAxisAngle(UP, hsh * 6.283);
-          cc.setHex(GREENS[(tr.v % 6) | 0] || GREENS[0]);
-          // atlas liści jest jasny, ale nie biały: lekkie rozjaśnienie, by barwa korony została jak wcześniej
-          var kc = (0.78 + hash2(sa + 5, 23) * 0.4) * 1.22;
-          if (sh === 1) { cc.r *= 1.12; cc.g *= 1.06; }
-          if (sh === 2) { cc.r *= 0.8; cc.b *= 1.15; kc *= 0.85; }
-          cc.multiplyScalar(kc);
-          mtx.compose(pv.set(tr.x, 0, tr.y), qt, sv.set(r, r * ry, r));
-          near[vi].setMatrixAt(idx[vi], mtx); near[vi].setColorAt(idx[vi], cc); idx[vi]++;
-          mtx.compose(pv.set(tr.x, S.cy * r * ry, tr.y), qt, sv.set(S.sx * r, S.sy * r * ry, S.sz * r));
-          far.setMatrixAt(a, mtx); far.setColorAt(a, cc);
-          if (tr.x < minx) minx = tr.x; if (tr.x > maxx) maxx = tr.x; if (tr.y < minz) minz = tr.y; if (tr.y > maxz) maxz = tr.y;
-          fsTree(tr.x, tr.y, Math.max(S.sx, S.sz) * r, S.cy * r * ry, S.sy * r * ry);
-        }
-        // cast — rzuca cień (tylko komórki w zasięgu mapy cieni, przełączane w update)
-        var rec = { minx: minx - 8, maxx: maxx + 8, minz: minz - 8, maxz: maxz + 8, near: [], far: far, isNear: false, cast: false };
-        near.forEach(function (im) {
-          if (!im) return;
-          im.visible = false; im.castShadow = false; im.receiveShadow = shadowsOn && hi;
-          im.matrixAutoUpdate = false; im.updateMatrix();
-          if (im.computeBoundingSphere) im.computeBoundingSphere();
-          scene.add(im); keep(im); rec.near.push(im);
-        });
-        far.castShadow = false; far.receiveShadow = false; far.matrixAutoUpdate = false; far.updateMatrix();
-        if (far.computeBoundingSphere) far.computeBoundingSphere();
-        scene.add(far); keep(far);
-        self.treeChunks.push(rec);
+      for (t = 0, i = 0; t < list.length; t += step, i++) {
+        var tr = list[t], kind = T3.KIND_OF[(tr.v % 6) | 0] || 0, S = T3.SHAPES[kind];
+        var ix = Math.round(tr.x * 10), iz = Math.round(tr.y * 10), hsh = hash2(ix, iz);
+        var vi = kind * NV + (hash2(ix + 7, iz - 3) < 0.5 ? 0 : 1);
+        var r = (tr.r || 4) * (0.92 + hsh * 0.16), ry = 1 + (hash2(ix - 11, iz + 17) - 0.5) * 0.2;
+        qt.setFromAxisAngle(UP, hsh * 6.283);
+        cc.setHex(GREENS[(tr.v % 6) | 0] || GREENS[0]);
+        var kc = (0.78 + hash2(ix + 5, iz + 23) * 0.4) * 1.22;
+        cc.r *= kc * S.tint[0]; cc.g *= kc * S.tint[1]; cc.b *= kc * S.tint[2];
+        mtx.compose(pv.set(tr.x, 0, tr.y), qt, sv.set(r, r * ry, r)).toArray(TMa, i * 16);
+        TCa[i * 3] = cc.r; TCa[i * 3 + 1] = cc.g; TCa[i * 3 + 2] = cc.b;
+        TXa[i] = tr.x; TZa[i] = tr.y; TVa[i] = vi; cntV[vi]++;
+        // daleki LOD (środek w środku korony), osobno korony okrągłe i stożki
+        var fkey = Math.floor(tr.x / FCH) + ',' + Math.floor(tr.y / FCH) + ',' + S.cone, fc = farCells[fkey];
+        if (!fc) { fc = farCells[fkey] = { cone: S.cone, m: [], c: [] }; farKeys.push(fkey); }
+        mtx.compose(pv.set(tr.x, S.cy * r * ry, tr.y), qt, sv.set(S.sx * r, S.sy * r * ry, S.sz * r));
+        for (k = 0; k < 16; k++) fc.m.push(mtx.elements[k]);
+        fc.c.push(cc.r, cc.g, cc.b);
+        fsTree(tr.x, tr.y, Math.max(S.sx, S.sz) * r, S.cy * r * ry, S.sy * r * ry);
+      }
+      n = i;
+      self.treeCount = n;
+      farKeys.forEach(function (key) {
+        var fc = farCells[key], cnt = fc.c.length / 3, im = new THREE.InstancedMesh(farGeo[fc.cone ? 1 : 0], M.treeFar, cnt);
+        im.instanceMatrix.array.set(fc.m);
+        im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(fc.c), 3);
+        im.castShadow = false; im.receiveShadow = false; im.matrixAutoUpdate = false; im.updateMatrix();
+        if (im.computeBoundingSphere) im.computeBoundingSphere();
+        scene.add(im); keep(im);
       });
+      // siatka do wybierania drzew wokół kamery (sortowanie przez zliczanie)
+      var GC = 64, gx0 = Infinity, gz0 = Infinity, gx1 = -Infinity, gz1 = -Infinity;
+      for (i = 0; i < n; i++) { gx0 = Math.min(gx0, TXa[i]); gx1 = Math.max(gx1, TXa[i]); gz0 = Math.min(gz0, TZa[i]); gz1 = Math.max(gz1, TZa[i]); }
+      var GW = Math.floor((gx1 - gx0) / GC) + 1, GH = Math.floor((gz1 - gz0) / GC) + 1, cellOf = new Int32Array(n);
+      var cellStart = new Int32Array(GW * GH + 1), cellItems = new Int32Array(n), fillAt = new Int32Array(GW * GH);
+      for (i = 0; i < n; i++) { cellOf[i] = Math.floor((TZa[i] - gz0) / GC) * GW + Math.floor((TXa[i] - gx0) / GC); cellStart[cellOf[i] + 1]++; }
+      for (i = 0; i < GW * GH; i++) { cellStart[i + 1] += cellStart[i]; fillAt[i] = cellStart[i]; }
+      for (i = 0; i < n; i++) cellItems[fillAt[cellOf[i]]++] = i;
+      // listy rysowane: blisko (rzucają cień), średnio w zasięgu cieni (rzucają) i średnio dalej (bez cieni)
+      var depthMid = keep(T3.depthMaterial(self.windU, { lod: self.treeLodMid }));
+      function dynMesh(geo, mat, cap, cast, depthMat) {
+        var im = new THREE.InstancedMesh(geo, mat, Math.max(1, cap));
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, cap) * 3), 3);
+        im.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        im.count = 0; im.visible = false; im.frustumCulled = false;
+        im.castShadow = cast; im.receiveShadow = cast && hi;
+        if (depthMat) im.customDepthMaterial = depthMat;
+        im.matrixAutoUpdate = false; im.updateMatrix();
+        scene.add(im); keep(im);
+        return im;
+      }
+      var detM = [], midN = [], midF = [];
+      for (v = 0; v < NVAR; v++) {
+        if (detR > 0) detM.push(dynMesh(detGeo[v], M.treeDet, Math.min(cntV[v], 1500), shadowsOn, null));
+        if (shadowsOn) midN.push(dynMesh(midGeo[v], M.tree, Math.min(cntV[v], 3000), true, depthMid));
+        midF.push(dynMesh(midGeo[v], M.tree, cntV[v], false, null));
+      }
+      function scan(cx, cz, R, fn) {
+        var ax = Math.max(0, Math.floor((cx - R - gx0) / GC)), bx = Math.min(GW - 1, Math.floor((cx + R - gx0) / GC));
+        var az = Math.max(0, Math.floor((cz - R - gz0) / GC)), bz = Math.min(GH - 1, Math.floor((cz + R - gz0) / GC)), R2 = R * R;
+        for (var gz = az; gz <= bz; gz++) for (var gx = ax; gx <= bx; gx++) {
+          var c = gz * GW + gx;
+          for (var p = cellStart[c]; p < cellStart[c + 1]; p++) {
+            var j = cellItems[p], dx = TXa[j] - cx, dz = TZa[j] - cz;
+            if (dx * dx + dz * dz <= R2) fn(j);
+          }
+        }
+      }
+      function put(im, j) {
+        var c = im.count;
+        if (c >= im.instanceMatrix.count) return;
+        im.instanceMatrix.array.set(TMa.subarray(j * 16, j * 16 + 16), c * 16);
+        var ca = im.instanceColor.array;
+        ca[c * 3] = TCa[j * 3]; ca[c * 3 + 1] = TCa[j * 3 + 1]; ca[c * 3 + 2] = TCa[j * 3 + 2];
+        im.count = c + 1;
+      }
+      function reset(arr) { for (var a = 0; a < arr.length; a++) arr[a].count = 0; }
+      function flush(arr) {
+        for (var a = 0; a < arr.length; a++) {
+          var im = arr[a], c = im.count;
+          im.visible = c > 0;
+          if (!c) continue;
+          im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, c * 16); im.instanceMatrix.needsUpdate = true;
+          im.instanceColor.clearUpdateRanges(); im.instanceColor.addUpdateRange(0, c * 3); im.instanceColor.needsUpdate = true;
+        }
+      }
+      // k — mnożnik zasięgów dla wąskiego kąta widzenia (kamery TV z daleka widzą drzewa jak z bliska)
+      var F = self.forest = { dcx: 1e9, dcz: 1e9, mcx: 1e9, mcz: 1e9, scx: 1e9, scz: 1e9, detR: detR, midR: midR, k: 1 };
+      F.rebuildDet = function (cx, cz) {
+        F.dcx = cx; F.dcz = cz;
+        if (!detM.length) return;
+        var R = detR * F.k;
+        reset(detM);
+        scan(cx, cz, R, function (j) { put(detM[TVa[j]], j); });
+        flush(detM);
+        self.treeLodMid.value.set(cx, cz, R, 0);
+      };
+      // sr — promień wokół (scx, scz), w którym drzewa mogą rzucić cień do mapy cieni
+      F.rebuildMid = function (cx, cz, scx, scz, sr) {
+        F.mcx = cx; F.mcz = cz; F.scx = scx; F.scz = scz;
+        var sr2 = sr * sr, useN = midN.length > 0 && sr > 0, R = midR * F.k;
+        reset(midN); reset(midF);
+        scan(cx, cz, R, function (j) {
+          var dx = TXa[j] - scx, dz = TZa[j] - scz;
+          put(useN && dx * dx + dz * dz <= sr2 ? midN[TVa[j]] : midF[TVa[j]], j);
+        });
+        flush(midN); flush(midF);
+        self.treeLodFar.value.set(cx, cz, R, 0);
+      };
     });
     // ---------- trawa 3D: kępki w siatce wokół kamery (położenie i maska liczone w shaderze) ----------
     // Maska w rzucie z góry: R — odległość od twardej nawierzchni (0..20 m, pole odległości dobrze się interpoluje),
@@ -2054,33 +1930,28 @@
       this.grassMesh.visible = cp.y < 14;
       this.grassU.o.value.x = cp.x; this.grassU.o.value.y = cp.z;
     }
-    // las: szczegółowe drzewa tylko w pobliżu kamery
-    var C = this.treeChunks, nr = this.treeNear, fr = nr + 60;
-    // cienie rzucają tylko komórki w zasięgu pudełka cieni; dalsze drzewa i tak nie trafiają do mapy cieni,
-    // a rysowane w niej kosztowały prawie tyle, co cały las na ekranie
-    var sh = this.shadowsOn && this.sun, scx = 0, scz = 0, sr2 = 0;
-    // pudełko cieni pada na ziemię ukośnie: wzdłuż kierunku słońca sięga ext / sin(wysokości), w poprzek ext;
-    // do tego długość cienia drzewa (do 30 m wysokości) i zapas
-    if (sh) {
-      var st = this.sun.target.position, ext = this.shadowExt, along = ext * Math.sqrt(1 + this.cotE * this.cotE);
-      scx = st.x; scz = st.z;
-      var sr = Math.sqrt(ext * ext + along * along) + 30 * this.cotE + 12; sr2 = sr * sr;
-    }
-    for (var i = 0; i < C.length; i++) {
-      var c = C[i];
-      var ex = c.minx - cp.x > 0 ? c.minx - cp.x : cp.x - c.maxx > 0 ? cp.x - c.maxx : 0;
-      var ez = c.minz - cp.z > 0 ? c.minz - cp.z : cp.z - c.maxz > 0 ? cp.z - c.maxz : 0;
-      var d2 = ex * ex + ez * ez, want = c.isNear ? d2 < fr * fr : d2 < nr * nr;
-      var cast = false;
-      if (sh && want) {
-        var sx = c.minx - scx > 0 ? c.minx - scx : scx - c.maxx > 0 ? scx - c.maxx : 0;
-        var sz = c.minz - scz > 0 ? c.minz - scz : scz - c.maxz > 0 ? scz - c.maxz : 0;
-        cast = sx * sx + sz * sz < sr2;
+    // las: listy drzew bliskich i średnich wokół kamery; cienie rzucają drzewa, których cień może paść w pudełko
+    // cieni (wzdłuż kierunku słońca sięga ext / sin(wysokości), w poprzek ext; do tego cień drzewa do 30 m wysokości
+    // i zapas na ruch kamery między przebudowami list)
+    var F = this.forest;
+    if (F) {
+      var scx = cp.x, scz = cp.z, sr = 0;
+      if (this.shadowsOn && this.sun) {
+        var st = this.sun.target.position, ext = this.shadowExt, along = ext * Math.sqrt(1 + this.cotE * this.cotE);
+        scx = st.x; scz = st.z;
+        sr = Math.sqrt(ext * ext + along * along) + 30 * this.cotE + 12 + 25;
       }
-      if (want !== c.isNear || cast !== c.cast) {
-        c.isNear = want; c.cast = cast; c.far.visible = !want;
-        for (var k = 0; k < c.near.length; k++) { c.near[k].visible = want; c.near[k].castShadow = cast; }
-      }
+      // wąski kąt widzenia (teleobiektyw kamer TV): większe zasięgi szczegółów, skwantowane, by nie przebudowywać list
+      // przy każdej zmianie zbliżenia
+      var kf = 1;
+      if (camera.fov > 0) kf = clamp(0.7265 / Math.max(0.05, Math.tan(camera.fov * Math.PI / 360)), 1, 1.4);
+      kf = Math.round(kf * 5) / 5;
+      var force = kf !== F.k;
+      F.k = kf;
+      var mdx = cp.x - F.mcx, mdz = cp.z - F.mcz, sdx = scx - F.scx, sdz = scz - F.scz;
+      if (force || mdx * mdx + mdz * mdz > 400 || sdx * sdx + sdz * sdz > 225) F.rebuildMid(cp.x, cp.z, scx, scz, sr);
+      var ddx = cp.x - F.dcx, ddz = cp.z - F.dcz;
+      if (force || ddx * ddx + ddz * ddz > 9) F.rebuildDet(cp.x, cp.z);
     }
     // deszcz: każda kropla zawija się osobno
     if (this.rain && this.rain.visible && this.rainPos) {
@@ -2097,7 +1968,7 @@
   W.dispose = function () {
     this.disposables.forEach(function (d) { try { if (d && d.dispose) d.dispose(); } catch (e) { /* nic */ } });
     this.disposables = [];
-    this.treeChunks = [];
+    this.forest = null;
     if (this.envRT) { try { this.envRT.dispose(); } catch (e) { /* nic */ } this.envRT = null; }
     if (this.pmrem) { try { this.pmrem.dispose(); } catch (e) { /* nic */ } this.pmrem = null; }
     if (this.sun && this.sun.shadow && this.sun.shadow.dispose) { try { this.sun.shadow.dispose(); } catch (e) { /* nic */ } }
