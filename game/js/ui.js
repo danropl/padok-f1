@@ -45,16 +45,8 @@
     // animacja wejścia tylko przy przejściu na inny ekran, nie przy odświeżeniu tego samego
     var s = h('div', { class: 'screen ' + (cls || 'solid') + (id !== lastScreen ? ' enter' : ''), id: id });
     lastScreen = id;
-    if (id !== 'loading' && id !== 'nowebgl') s.appendChild(hintBar());
-    root.appendChild(s); return s;
-  }
-  // Pasek podpowiedzi sterowania na dole ekranu: klawiatura albo pad (klasa html.pad)
-  function hintBar() {
     syncPadClass();
-    var k = function (t) { return h('kbd', { text: t }); };
-    return h('div', { class: 'hints', 'aria-hidden': 'true' },
-      h('span', { class: 'hk' }, k('↑'), k('↓'), k('←'), k('→'), ' wybór'), h('span', { class: 'hk' }, k('Enter'), ' zatwierdź'), h('span', { class: 'hk' }, k('Esc'), ' wstecz'),
-      h('span', { class: 'hp' }, k('✥'), ' wybór'), h('span', { class: 'hp' }, k('✕'), ' zatwierdź'), h('span', { class: 'hp' }, k('○'), ' wstecz'));
+    root.appendChild(s); return s;
   }
   function syncPadClass() { document.documentElement.classList.toggle('pad', !!(PG.Pad && PG.Pad.connected)); }
   function money(v) { return Math.round(v).toLocaleString('pl-PL') + ' tys. €'; }
@@ -182,7 +174,7 @@
     var list = h('nav', { class: 'menu-list', 'aria-label': 'Tryby gry' });
     items.forEach(function (it, k) {
       list.appendChild(h('button', { type: 'button', class: 'mi' + (k === 0 ? ' primary' : ''), onclick: it[2] },
-        h('span', { class: 'n num', 'aria-hidden': 'true', text: (k < 9 ? '0' : '') + (k + 1) }), h('span', { class: 'tt', text: it[0] }), h('small', { text: it[1] })));
+        h('span', { class: 'n num', 'aria-hidden': 'true', text: (k < 9 ? '0' : '') + (k + 1) }), h('span', { class: 'tt', text: it[0] })));
     });
     w.appendChild(list);
     w.appendChild(h('p', { class: 'muted menu-foot', text: 'Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.' }));

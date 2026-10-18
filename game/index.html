@@ -149,11 +149,10 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-family: var(--font-
 #menu { display: flex; flex-direction: column; }
 .menu-layout { flex: 1; display: grid; grid-template-rows: auto 1fr auto auto; gap: 18px; min-height: 100%; max-width: 1240px; width: 100%; margin-inline: auto; box-sizing: border-box; padding-bottom: 44px; }
 /* lista trybów: numer, nazwa kursywą, opis; bez kart, cienkie linie jak w arkuszu czasów */
-.menu-list { grid-row: 3; display: flex; flex-direction: column; width: min(680px, 100%); border-top: 1px solid rgb(244 241 234 / 0.18); }
-.mi { display: grid; grid-template-columns: 3rem auto 1fr; align-items: center; column-gap: 18px; padding: 14px 18px 14px 8px; background: transparent; border: 0; border-bottom: 1px solid rgb(244 241 234 / 0.18); border-radius: 0; isolation: isolate; }
+.menu-list { grid-row: 3; display: flex; flex-direction: column; width: min(480px, 100%); border-top: 1px solid rgb(244 241 234 / 0.18); }
+.mi { display: grid; grid-template-columns: 3rem 1fr; align-items: center; column-gap: 18px; padding: 14px 18px 14px 8px; background: transparent; border: 0; border-bottom: 1px solid rgb(244 241 234 / 0.18); border-radius: 0; isolation: isolate; }
 .mi .n { font-family: var(--font-ui); font-size: 18px; font-weight: 700; font-style: italic; line-height: 1; font-variant-numeric: tabular-nums lining-nums; color: var(--muted); letter-spacing: 0.02em; text-align: right; }
 .mi .tt { font-size: clamp(24px, 2.4vw, 32px); font-weight: 900; font-style: italic; line-height: 1.05; letter-spacing: -0.01em; }
-.mi small { justify-self: end; text-align: right; font-size: 15px; font-weight: 400; color: var(--muted); }
 .mi:hover, .mi:focus-visible, .mi.padfocus { background: rgb(244 241 234 / 0.07); border-color: rgb(244 241 234 / 0.18); }
 
 .mi:hover .n, .mi:focus-visible .n, .mi.padfocus .n { color: var(--amber); }
@@ -161,11 +160,10 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-family: var(--font-
 .mi.primary { background: transparent; border-color: rgb(244 241 234 / 0.18); padding-block: 22px; }
 .mi.primary::before { content: ''; position: absolute; inset: 6px 8px 6px 0; z-index: -1; background: var(--red); transform: skewX(-14deg); transform-origin: bottom left; }
 .mi.primary .n { color: #fff; }
-.mi.primary small { color: #ffe0da; }
 .mi.primary .tt { font-size: clamp(30px, 3.2vw, 42px); }
 .mi.primary:hover::before, .mi.primary.padfocus::before, .mi.primary:focus-visible::before { background: var(--red-hi); }
 .mi.primary:hover, .mi.primary.padfocus, .mi.primary:focus-visible { background: transparent; }
-@media (max-width: 600px) { .mi { grid-template-columns: 2.4rem 1fr; row-gap: 2px; } .mi .n { grid-row: 1 / span 2; align-self: start; padding-top: 0.45em; } .mi small { grid-column: 2; justify-self: start; text-align: left; } }
+@media (max-width: 600px) { .mi { grid-template-columns: 2.4rem 1fr; } }
 .menu-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .menu-top .ver { margin-top: 12px; font-size: 15px; color: var(--muted); letter-spacing: 0.06em; }
 .menu-foot { grid-row: 4; font-size: 13px; }
@@ -210,16 +208,6 @@ button.big { font-size: 19px; padding: 12px 26px; min-block-size: 50px; text-ali
 .sections { min-width: 0; }
 .sections > .panel { max-width: 720px; }
 @media (max-width: 760px) { .split-nav { grid-template-columns: 1fr; } .sidenav { position: static; flex-direction: row; overflow-x: auto; } .sidenav button { flex: none; } }
-/* Pasek podpowiedzi sterowania */
-.hints { position: fixed; left: 50%; bottom: max(10px, env(safe-area-inset-bottom, 0px)); translate: -50% 0; z-index: 6; display: flex; gap: 18px; align-items: center; padding: 6px 14px; border-radius: 4px; background: rgb(12 11 10 / 0.85); border: 1px solid var(--line-soft); font-size: 14px; color: var(--muted); white-space: nowrap; pointer-events: none; }
-.hints kbd { margin-right: 2px; }
-.hints .hp { display: none; }
-html.pad .hints .hk { display: none; }
-html.pad .hints .hp { display: inline; }
-.screen:has(> .hints) { padding-bottom: max(64px, calc(env(safe-area-inset-bottom, 0px) + 56px)); }
-#menu.screen:has(> .hints) { padding-bottom: clamp(16px, 2.4vw, 32px); }
-@media (pointer: coarse) { html:not(.pad) .hints { display: none; } }
-@media (max-width: 520px) { .hints { display: none; } }
 /* Pauza: panel wysuwany z lewej, gra widoczna obok */
 #pause { padding: 0 !important; }
 #pause > .panel { max-width: 460px !important; min-height: 100%; margin: 0 !important; box-sizing: border-box; border-radius: 0; border-width: 0 1px 0 0; padding: max(28px, env(safe-area-inset-top, 0px)) 28px 80px; background: rgb(16 15 14 / 0.96); animation: sheetIn 260ms var(--ease-out) both !important; }
@@ -396,7 +384,7 @@ canvas.car3d { border-radius: 6px; }
   input[type=range] { --slider-thumb-size: 26px; block-size: 44px; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .panel, .sidenav, .hints, .wrap > .row:first-child, #pause { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .panel, .sidenav, .wrap > .row:first-child, #pause { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   .panel { background: rgb(16 21 28 / 0.97); }
 }
 @media (forced-colors: active) {
@@ -457,31 +445,31 @@ canvas.car3d { border-radius: 6px; }
   <div id="ui"></div>
 </div>
 
-<script src="js/vendor/three.min.js?v=2026.10.18.10"></script>
-<script src="js/data.js?v=2026.10.18.10"></script>
-<script src="js/keys.js?v=2026.10.18.10"></script>
-<script src="js/track.js?v=2026.10.18.10"></script>
-<script src="js/physics.js?v=2026.10.18.10"></script>
-<script src="js/session.js?v=2026.10.18.10"></script>
-<script src="js/quali.js?v=2026.10.18.10"></script>
-<script src="js/pit.js?v=2026.10.18.10"></script>
-<script src="js/racecontrol.js?v=2026.10.18.10"></script>
-<script src="js/sprites.js?v=2026.10.18.10"></script>
-<script src="js/render.js?v=2026.10.18.10"></script>
-<script src="js/engines.js?v=2026.10.18.10"></script>
-<script src="js/enginepack.js?v=2026.10.18.10"></script>
-<script src="js/audio.js?v=2026.10.18.10"></script>
-<script src="js/career.js?v=2026.10.18.10"></script>
-<script src="js/car3d.js?v=2026.10.18.10"></script>
-<script src="js/cockpit3d.js?v=2026.10.18.10"></script>
-<script src="js/trees3d.js?v=2026.10.18.10"></script>
-<script src="js/world3d-lite.js?v=2026.10.18.10"></script>
-<script src="js/post3d.js?v=2026.10.18.10"></script>
-<script src="js/view3d.js?v=2026.10.18.10"></script>
-<script src="js/input.js?v=2026.10.18.10"></script>
-<script src="js/game.js?v=2026.10.18.10"></script>
-<script src="js/ui.js?v=2026.10.18.10"></script>
-<script src="js/net.js?v=2026.10.18.10"></script>
-<script src="js/multi.js?v=2026.10.18.10"></script>
+<script src="js/vendor/three.min.js?v=2026.10.18.11"></script>
+<script src="js/data.js?v=2026.10.18.11"></script>
+<script src="js/keys.js?v=2026.10.18.11"></script>
+<script src="js/track.js?v=2026.10.18.11"></script>
+<script src="js/physics.js?v=2026.10.18.11"></script>
+<script src="js/session.js?v=2026.10.18.11"></script>
+<script src="js/quali.js?v=2026.10.18.11"></script>
+<script src="js/pit.js?v=2026.10.18.11"></script>
+<script src="js/racecontrol.js?v=2026.10.18.11"></script>
+<script src="js/sprites.js?v=2026.10.18.11"></script>
+<script src="js/render.js?v=2026.10.18.11"></script>
+<script src="js/engines.js?v=2026.10.18.11"></script>
+<script src="js/enginepack.js?v=2026.10.18.11"></script>
+<script src="js/audio.js?v=2026.10.18.11"></script>
+<script src="js/career.js?v=2026.10.18.11"></script>
+<script src="js/car3d.js?v=2026.10.18.11"></script>
+<script src="js/cockpit3d.js?v=2026.10.18.11"></script>
+<script src="js/trees3d.js?v=2026.10.18.11"></script>
+<script src="js/world3d-lite.js?v=2026.10.18.11"></script>
+<script src="js/post3d.js?v=2026.10.18.11"></script>
+<script src="js/view3d.js?v=2026.10.18.11"></script>
+<script src="js/input.js?v=2026.10.18.11"></script>
+<script src="js/game.js?v=2026.10.18.11"></script>
+<script src="js/ui.js?v=2026.10.18.11"></script>
+<script src="js/net.js?v=2026.10.18.11"></script>
+<script src="js/multi.js?v=2026.10.18.11"></script>
 
 </body></html>
