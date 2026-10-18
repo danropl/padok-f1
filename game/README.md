@@ -1,6 +1,6 @@
 # WORLD GP
 
-Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników V10 (także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
+Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo nagrania z paczki do F1 25, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
@@ -50,7 +50,7 @@ Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕`
 **Ustawienia → Jazda → Skrzynia biegów: Ręczna** (także w menu pauzy). Domyślnie skrzynia jest automatyczna, a AI zawsze jeździ z automatem.
 
 - Zmiana biegów: klawiatura `X` w górę, `Z` w dół (albo `+` / `−` na klawiaturze numerycznej); pad `R1` w górę, `L1` w dół. Przy ręcznej skrzyni DRS na padzie jest pod `✕`, a zjazd do boksu pod `Create` albo `L3`. Na telefonie pojawiają się przyciski `+` i `−`.
-- Pełna moc jest od ok. 12 000 obr./min (silnik V10 kręci się do 19 000). Na za wysokim biegu silnik słabnie, a na końcu biegu działa ogranicznik obrotów (bieg na wyświetlaczu robi się niebieski).
+- Pełna moc jest od ok. 12 000 obr./min (silnik kręci się do 19 000). Na za wysokim biegu silnik słabnie, a na końcu biegu działa ogranicznik obrotów (bieg na wyświetlaczu robi się niebieski).
 - Redukcja, po której silnik przekroczyłby obroty, jest blokowana. Niższy bieg mocniej hamuje silnikiem.
 - Kto zmienia biegi przy ok. 18 500 obr./min (zapalone prawie wszystkie diody), jest prawie tak szybki jak automat (0–200 km/h: 4,7 s wobec 4,6 s).
 - Aleja serwisowa, powrót na tor (`R`) i przejęcie bolidu przez AI ustawiają bieg automatycznie.
@@ -78,16 +78,14 @@ Działają w Chrome i Edge (WebHID), gdy gra jest otwarta z `localhost` albo `ht
 - **L2 (hamulec):** opór twardnieje w miarę wciskania jak pedał hamulca (mocniej przy dużej prędkości), drży przy pracy ABS, odbija przy blokowaniu kół.
 - **R2 (gaz):** lekka sprężyna, szarpnięcie przy zmianie biegu w górę, drżenie na ograniczniku obrotów, przy buksowaniu, pracy kontroli trakcji, na żwirze, trawie i krawężnikach.
 
-## Dźwięk silników V10
+## Dźwięk silników
 
-Silniki brzmią jak V10 z F1 lat 2000–2005. Dźwięk jest syntezowany na bieżąco, bez nagrań:
+**Ustawienia → Dźwięk → Silniki:**
 
-- **Obroty:** do 19 000 obr./min, 10 zapłonów na dwa obroty wału (przy 18 000 obr./min 1500 na sekundę). Przełożenia są stałe, więc na każdym biegu obroty rosną liniowo z prędkością, a po zmianie w górę spadają o ok. 20%. Diody na kierownicy i pasek obrotów zapalają się od ok. 15 000 obr./min.
-- **Model:** impulsy ciśnienia z dwóch rzędów cylindrów przez osobne rury wydechowe, dolot z rezonansem airboksu, rozrzut spalania między zapłonami. Każdy bolid ma trochę inny charakter brzmienia.
-- **Zachowanie:** strzały z wydechu po odpuszczeniu gazu, krótka przerwa zapłonu przy zmianie biegu w górę, przegazówka przy redukcji, ogranicznik obrotów, ogranicznik prędkości w alei serwisowej, wypadanie zapłonów przy uszkodzonym silniku. Na polach startowych przy zapalonych światłach rywale trzymają obroty.
-- **Słuchacz w kamerze:** z kokpitu i T-kamery słychać dolot i silnik z bliska, z zewnątrz głównie wydech. Słychać też do 4 najbliższych rywali, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej).
-- **Ustawienia → Dźwięk → Silniki:** V10, Paczka F1 25 (nagrania, niżej) albo Prosty (dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia).
-- Synteza działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`. Z innego adresu ten sam dźwięk liczy się w wątku głównym.
+- **Klasyczny** (domyślnie, gdy nie ma paczki): dawny dźwięk gry — dwa oscylatory z filtrem, wysokość z obrotów, barwa z gazu. Słychać tylko własny bolid.
+- **Paczka F1 25**: nagrania silników z paczki do gry F1 25 wczytanej z dysku gracza (niżej). Słychać własny bolid i do 4 najbliższych rywali, każdy z silnikiem swojego producenta, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej). Bez wczytanej paczki gra dźwięk klasyczny.
+
+Obroty: do 19 000 obr./min. Przełożenia są stałe, więc na każdym biegu obroty rosną liniowo z prędkością, a po zmianie w górę spadają o ok. 15–20%; skrzynia automatyczna zmienia bieg przy ok. 18 400. Diody na kierownicy i pasek obrotów zapalają się od ok. 15 000 obr./min.
 
 ## Dźwięki silników z paczki do F1 25 (opcjonalnie)
 
@@ -97,9 +95,11 @@ Gra potrafi grać prawdziwe nagrania silników z paczki dźwięków do gry F1 25
 2. Gra pokaże zestawy z paczki (F1 2019, F1 2020, F1 22, F1 23, F1 24, F1 25 dla bolidów 2026, V8, V10, V12). Domyślnie wybiera **F1 24 Engine Sounds** — kliknij **Zainstaluj zestaw**. Zmiana zestawu: wybierz inny i zainstaluj go ponownie (bez ponownego wskazywania pliku, dopóki strona jest otwarta).
 3. Silniki: **Paczka F1 25** włącza się sama. Po ponownym uruchomieniu gry paczka wczytuje się z przeglądarki (ok. 16–20 MB na zestaw). **Usuń paczkę** kasuje nagrania z przeglądarki.
 
-Każdy bolid brzmi jak silnik swojego producenta: Ferro → Ferrari, Stella → Mercedes, Honta → Honda, Renova → Renault (pliki `*_2025.bdl`; w zestawie dla bolidów 2026 Honda i Renault z najbliższych odpowiedników). Tak jak przy V10 słychać rywali w pobliżu, odległość, kierunek, efekt Dopplera, przerwę zapłonu przy zmianie biegu i ogranicznik w alei. Na ograniczniku obrotów (np. przy prędkości maksymalnej z DRS na 8. biegu) gra nagranie silnika na ograniczniku z końca przemiatania, jak w F1 25. Kto nie ma paczki (np. drugi gracz w multiplayerze), słyszy V10.
+Każdy bolid brzmi jak silnik swojego producenta: Ferro → Ferrari, Stella → Mercedes, Honta → Honda, Renova → Renault (pliki `*_2025.bdl`; w zestawie dla bolidów 2026 Honda i Renault z najbliższych odpowiedników). Słychać też przerwę zapłonu przy zmianie biegu, przegazówkę przy redukcji, ogranicznik w alei, strzały z wydechu po odpuszczeniu gazu i wypadanie zapłonów przy uszkodzonym silniku; na polach startowych przy zapalonych światłach rywale trzymają obroty. Kto nie ma paczki (np. drugi gracz w multiplayerze), słyszy dźwięk klasyczny.
 
-Jak to działa: plik `.bdl` to pakiet nagrań z silnika gry (EGO). Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Na ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania (punkty pętli dobrane tak, by jej koniec gładko przechodził w początek). Obroty bolidu (4500–19 000) są przeliczane na zakres nagrania (jałowe–ogranicznik), gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku.
+**Maksymalne obroty brzmią jak maksymalne obroty nagrania:** jałowe (4500) to jałowe z nagrania, zmiana biegu skrzyni automatycznej (ok. 18 400) to sam koniec przemiatania na gazie, a od 18 800 (diody ogranicznika) i na ograniczniku (np. przy prędkości maksymalnej z DRS na 8. biegu) gra nagranie silnika na ograniczniku z końca przemiatania, jak w F1 25. Na gazie głośność rośnie z obrotami aż do maksimum — w niektórych nagraniach silnik przy samym ograniczniku cichnie, w grze nie. Z kamery za bolidem własny silnik gra ze stałą głośnością i bez efektu Dopplera (kamera przy dużej prędkości zostaje w tyle, ale silnik nie cichnie).
+
+Jak to działa: plik `.bdl` to pakiet nagrań z silnika gry (EGO). Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Na ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania (punkty pętli dobrane tak, by jej koniec gładko przechodził w początek). Gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku. Odtwarzanie działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`; z innego adresu ten sam kod liczy się w wątku głównym.
 
 Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Firefox 113+; w starszych rozpakuj paczkę i wskaż folder.
 
@@ -124,8 +124,8 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/sprites.js` | ikony bolidów, kasków i flag w menu i kreatorze |
 | `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, drzewa, trawa, kamery, postprocessing |
 | `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, dłonie) |
-| `js/audio.js` | dźwięk: silniki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
-| `js/v10.js` | synteza dźwięku silnika V10 i odtwarzanie nagrań z paczki F1 25 (AudioWorklet, zapasowo w wątku głównym) |
+| `js/audio.js` | dźwięk: silnik klasyczny, silniki z paczki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
+| `js/engines.js` | odtwarzanie nagrań silników z paczki F1 25 (synteza ziarnista w AudioWorklecie, zapasowo w wątku głównym) |
 | `js/enginepack.js` | wczytywanie paczki dźwięków F1 25 z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |
 | `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/game.js` | pętla gry |

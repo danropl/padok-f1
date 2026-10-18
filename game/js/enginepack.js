@@ -134,6 +134,25 @@
     }
     e2[M - 1] = e2[M - 2];
     for (i = 0; i < M; i++) { var sv = 0, cn = 0; for (k = Math.max(0, i - 3); k <= Math.min(M - 1, i + 3); k++) { sv += e2[k]; cn++; } lv[i] = Math.sqrt(sv / cn) + 1; }
+    // poziom docelowy (lt) i wzmocnienie pętli ogranicznika (gp): na gazie głośność nie maleje z obrotami —
+    // od jałowych do ogranicznika rośnie do najgłośniejszego miejsca nagrania i tak zostaje (w niektórych
+    // nagraniach silnik przy samym ograniczniku cichnie, a w grze maksymalne obroty mają brzmieć najmocniej)
+    var lt = lv, gp = 1;
+    if (up) {
+      lt = new Float32Array(M);
+      var run = 0, ws, plE = 0, plN = 0;
+      for (i = 0; i < M; i++) {
+        var s3 = 0, c3 = 0;
+        for (k = Math.max(0, i - 12); k <= Math.min(M - 1, i + 12); k++) { s3 += e2[k]; c3++; }
+        ws = Math.sqrt(s3 / c3) + 1;
+        if (i >= a && ws > run) run = ws;
+        lt[i] = i >= a ? run : ws;
+        if (i >= b && i <= z) { plE += e2[i]; plN++; }
+      }
+      var plL = Math.sqrt(plE / Math.max(1, plN)) + 1, topL = lt[Math.max(a, b - 1)];
+      gp = Math.min(2.5, Math.max(1, topL / plL));
+      for (i = b; i < M; i++) lt[i] = Math.max(lt[i], topL);
+    }
     // pętla w stałym zakresie (ogranicznik, jałowe) grana do przodu, jak nagrano: koniec le i początek ls
     // dobrane tak, by cykl le był jak najbardziej podobny do cyklu ls−1 (wtedy przejście jest niesłyszalne)
     var ls = b, le = z;
@@ -159,7 +178,7 @@
       }
     }
     return {
-      pcm: pcm, sr: sr, mk: mk, per: per, rpm: rpm, rf: rf, wn: wn, lv: lv, a: a, b: b, z: z, ls: ls, le: le, up: up, pr: pr, re: re, rs: rpm[a],
+      pcm: pcm, sr: sr, mk: mk, per: per, rpm: rpm, rf: rf, wn: wn, lv: lv, lt: lt, gp: gp, a: a, b: b, z: z, ls: ls, le: le, up: up, pr: pr, re: re, rs: rpm[a],
       a2: a + Math.min(20, (b - a) >> 3), // początek nagrania (otwarcie/zamknięcie przepustnicy) tylko po skoku, nie w wahadle
       pt: up ? Math.min(re, pr) * 0.998 : Math.max(re, pr) * 1.002, // od tych obrotów stały zakres (ogranicznik / jałowe)
       rms: Math.sqrt(ss / Math.max(1, (s1 - s0) / 2)) / 32768, cyl: sec.cyl
@@ -182,9 +201,11 @@
       var on = prepLayer(so), off = prepLayer(sf), g = 0.2 / Math.max(0.02, on.rms); // ta sama głośność gazu w każdym banku
       mics.push({ on: on, off: off, g: g, go: g * 0.71 });                       // bez gazu o 3 dB ciszej: wyraźniej słychać odpuszczenie
     }
-    var A = mics[0], idle = A.off.pr, top = A.on.pr;
-    if (!(top > idle * 1.5)) { idle = Math.min(A.off.re, A.on.rs); top = Math.max(A.on.re, A.off.rs); }
-    return { name: name, cyl: A.on.cyl, idle: idle, top: top, mics: mics };
+    // obroty nagrań: jałowe (stały zakres z końca nagrania bez gazu), koniec przemiatania na gazie (rtop)
+    // i ogranicznik (top, stały zakres z końca nagrania na gazie)
+    var A = mics[0], idle = A.off.pr, rtop = A.on.re, top = Math.max(A.on.pr, A.on.re);
+    if (!(rtop > idle * 1.5)) { idle = Math.min(A.off.re, A.on.rs); rtop = Math.max(A.on.re, A.off.rs); top = Math.max(top, rtop); }
+    return { name: name, cyl: A.on.cyl, idle: idle, rtop: rtop, top: top, mics: mics };
   }
   EP.prepBank = prepBank;
 

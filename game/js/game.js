@@ -12,7 +12,7 @@
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---------- USTAWIENIA: domyślne wartości nowych kluczy (career.js zostaje bez zmian) ----------
-  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto', engineSound: 'v10' };
+  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto', engineSound: 'simple' };
   G.mergeSettings = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     if (!st) return;
@@ -25,7 +25,7 @@
     delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
     st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
     if (st.gearbox !== 'manual') st.gearbox = 'auto';
-    if (st.engineSound !== 'simple' && st.engineSound !== 'pack') st.engineSound = 'v10';
+    if (st.engineSound !== 'pack') st.engineSound = 'simple'; // dawny „V10” (synteza usunięta) → klasyczny
   };
   G.assistOpts = function () {
     var st = PG.Store.data.settings;

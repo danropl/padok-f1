@@ -196,21 +196,20 @@
     var st = Store.data.settings;
     return seg(LINE_OPTS, G.lineMode ? G.lineMode() : (st.racingLine || 'full'), function (v) { st.racingLine = v; st.brakeHint = v !== 'off'; Store.save(); if (onPick) onPick(v); });
   }
-  // Dźwięk silników: synteza V10, nagrania z paczki F1 25 (wczytanej z dysku gracza) albo dawny prosty dźwięk
+  // Dźwięk silników: klasyczny (dawny dźwięk gry) albo nagrania z paczki F1 25 wczytanej z dysku gracza
   var ENG_TXT = {
-    v10: 'V10: dźwięk silników z F1 lat 2000–2005 (do 19 000 obr./min) liczony na bieżąco. Słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera.',
-    pack: 'Paczka F1 25: nagrania silników z paczki do gry F1 25 wczytanej z Twojego dysku. Każdy bolid brzmi jak silnik swojego producenta, także rywale w pobliżu. Bez wczytanej paczki gra V10.',
-    simple: 'Prosty: dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia.'
+    simple: 'Klasyczny: dawny dźwięk gry, tylko własnego bolidu.',
+    pack: 'Paczka F1 25: nagrania silników z paczki do gry F1 25 wczytanej z Twojego dysku. Każdy bolid brzmi jak silnik swojego producenta, słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera. Bez wczytanej paczki gra dźwięk klasyczny.'
   };
   function enginePanel(st) {
     var EP = PG.EnginePack, box = h('div', { class: 'col', style: 'gap:8px' }), segBox = h('div'), engNote = note(''), packBox = h('div', { class: 'col', style: 'gap:6px' });
     var chosen = EP && EP.sets ? EP.defaultSet(EP.sets) : null, msg = '';
-    var mode = function () { return st.engineSound === 'simple' ? 'simple' : st.engineSound === 'pack' ? 'pack' : 'v10'; };
+    var mode = function () { return st.engineSound === 'pack' ? 'pack' : 'simple'; };
     var fileIn = h('input', { type: 'file', accept: '.zip,.bdl', multiple: true, style: 'display:none', onchange: function () { pick(fileIn.files); fileIn.value = ''; } });
     var dirIn = h('input', { type: 'file', webkitdirectory: true, style: 'display:none', onchange: function () { pick(dirIn.files); dirIn.value = ''; } });
     var drawSeg = function () {
       segBox.innerHTML = '';
-      segBox.appendChild(seg([['v10', 'V10'], ['pack', 'Paczka F1 25'], ['simple', 'Prosty']], mode(), function (v) {
+      segBox.appendChild(seg([['simple', 'Klasyczny'], ['pack', 'Paczka F1 25']], mode(), function (v) {
         st.engineSound = v; Store.save(); engNote.textContent = ENG_TXT[v];
         if (v === 'pack' && EP && !EP.ready && !EP.busy) fileIn.click();
       }));
@@ -256,7 +255,7 @@
       if (inf && !EP.busy) {
         var del = h('button', { type: 'button', class: 'danger', text: 'Usuń paczkę' });
         del.onclick = function () { confirmInline(del, 'Usunąć nagrania z przeglądarki?', function () {
-          EP.remove(); if (st.engineSound === 'pack') { st.engineSound = 'v10'; Store.save(); }
+          EP.remove(); if (st.engineSound === 'pack') { st.engineSound = 'simple'; Store.save(); }
           drawSeg(); draw();
         }); };
         row.appendChild(del);

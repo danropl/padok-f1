@@ -1,8 +1,8 @@
-// WORLD GP — dźwięk silnika i efekty (Web Audio, bez plików).
-// Silniki V10: synteza w js/v10.js (AudioWorklet), tu słuchacz w kamerze, wybór słyszanych bolidów,
-// odległość, panorama i efekt Dopplera. Ustawienie „Silniki: Prosty” wraca do dawnego, lżejszego dźwięku.
-// „Silniki: Paczka F1 25” — te same głosy grają nagrania silników z paczki wczytanej przez gracza
-// (js/enginepack.js), każdy bolid nagranie swojego producenta.
+// WORLD GP — dźwięk silnika i efekty (Web Audio).
+// Silnik „Klasyczny”: dwa oscylatory z filtrem, tylko bolid w kamerze (dawny dźwięk gry).
+// Silniki „Paczka F1 25”: nagrania silników z paczki wczytanej przez gracza (js/enginepack.js), odtwarzane
+// w osobnym wątku audio (js/engines.js): bolid w kamerze i najbliżsi rywale, każdy z nagraniem silnika swojego
+// producenta, z odległością, kierunkiem i efektem Dopplera. Bez wczytanej paczki gra dźwięk klasyczny.
 (function (PG) {
   'use strict';
   var A = PG.Audio = { ctx: null, on: true, vol: 0.5, lastCrunch: -9, lastDrs: -9 };
@@ -10,95 +10,105 @@
   function fin(x, d) { return (typeof x === 'number' && isFinite(x)) ? x : d; }
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
 
-  // ---------- silniki V10 ----------
-  var V10 = A.v10 = {
+  // ---------- silniki z nagrań (paczka F1 25) ----------
+  var EV = A.ev = {
     ready: false, node: null, eng: null, sp: null, bus: null, buf: null, slots: [], idle: true, tmp: null,
-    banks: null, bankMap: null, bankSent: null, useBank: false,
+    banks: null, bankMap: null, bankSent: null,
     lis: { x: 0, y: 0, z: 0, fx: 1, fz: 0, vx: 0, vz: 0, t: 0, ok: false, mode: 'chase' }
   };
   var MAX_DIST = 420; // dalej rywali nie słychać
 
-  function v10Init(c) {
-    var lib = window.PG_V10;
+  function evInit(c) {
+    var lib = window.PG_ENGINES;
     if (!lib) return;
-    V10.lib = lib; V10.P = lib.P; V10.NP = lib.NP;
-    V10.buf = new Float32Array(lib.NP * lib.MAXV);
-    for (var i = 0; i < lib.MAXV; i++) V10.slots.push({ car: null, gear: 0, up: 0, down: 0, reset: 0, free: 99 });
+    EV.lib = lib; EV.P = lib.P; EV.NP = lib.NP;
+    EV.buf = new Float32Array(lib.NP * lib.MAXV);
+    for (var i = 0; i < lib.MAXV; i++) EV.slots.push({ car: null, gear: 0, up: 0, down: 0, reset: 0, free: 99 });
     // szyna silników z kompresorem: kilka bolidów obok siebie nie przesteruje dźwięku
     var comp = c.createDynamicsCompressor();
     comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
-    V10.bus = c.createGain(); V10.bus.gain.value = 0.8;
-    V10.bus.connect(comp); comp.connect(A.master);
+    EV.bus = c.createGain(); EV.bus.gain.value = 0.8;
+    EV.bus.connect(comp); comp.connect(A.master);
     var useSP = function () {
       if (!c.createScriptProcessor) return;
-      var eng = V10.eng = new lib.Engine(c.sampleRate);
-      var sp = V10.sp = c.createScriptProcessor(2048, 0, 2);
+      var eng = EV.eng = new lib.Engine(c.sampleRate);
+      var sp = EV.sp = c.createScriptProcessor(2048, 0, 2);
       sp.onaudioprocess = function (ev) { var o = ev.outputBuffer; eng.process(o.getChannelData(0), o.getChannelData(1), o.length); };
-      sp.connect(V10.bus); V10.ready = true; v10SendBanks();
+      sp.connect(EV.bus); EV.ready = true; evSendBanks();
     };
     // AudioWorklet działa tylko z localhost albo https; inaczej ten sam kod w wątku głównym
     if (c.audioWorklet && window.AudioWorkletNode && window.isSecureContext !== false) {
-      c.audioWorklet.addModule('js/v10.js?v=' + (PG.VERSION || '')).then(function () {
-        V10.node = new AudioWorkletNode(c, 'pg-v10', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-        V10.node.connect(V10.bus); V10.ready = true; v10SendBanks();
-      }).catch(function (e) { console.warn('Dźwięk V10: AudioWorklet niedostępny, liczony w wątku głównym', e); useSP(); });
+      c.audioWorklet.addModule('js/engines.js?v=' + (PG.VERSION || '')).then(function () {
+        EV.node = new AudioWorkletNode(c, 'pg-engines', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+        EV.node.connect(EV.bus); EV.ready = true; evSendBanks();
+      }).catch(function (e) { console.warn('Dźwięk silników: AudioWorklet niedostępny, liczony w wątku głównym', e); useSP(); });
     } else useSP();
   }
 
   // Nagrania silników z paczki: przekazanie do wątku dźwięku (tablice przenoszone, bez kopii w pamięci strony)
-  function v10SendBanks() {
-    if (!V10.ready || V10.bankSent === V10.banks) return;
-    var banks = V10.banks;
-    if (V10.node) {
+  function evSendBanks() {
+    if (!EV.ready || EV.bankSent === EV.banks) return;
+    var banks = EV.banks;
+    if (EV.node) {
       var tr = [];
       (banks || []).forEach(function (b) {
         b.mics.forEach(function (m) {
           [m.on, m.off].forEach(function (L) {
-            ['pcm', 'mk', 'per', 'rpm', 'rf', 'wn', 'lv'].forEach(function (k) { var ab = L[k] && L[k].buffer; if (ab && ab.byteLength && tr.indexOf(ab) < 0) tr.push(ab); });
+            ['pcm', 'mk', 'per', 'rpm', 'rf', 'wn', 'lv', 'lt'].forEach(function (k) { var ab = L[k] && L[k].buffer; if (ab && ab.byteLength && tr.indexOf(ab) < 0) tr.push(ab); });
           });
         });
       });
-      try { V10.node.port.postMessage({ banks: banks }, tr); }
+      try { EV.node.port.postMessage({ banks: banks }, tr); }
       catch (e) { console.warn('Paczka dźwięków: nie udało się przekazać nagrań', e); return; }
-    } else if (V10.eng) V10.eng.setBanks(banks);
-    V10.bankSent = banks;
+    } else if (EV.eng) EV.eng.setBanks(banks);
+    EV.bankSent = banks;
   }
   A.setBanks = function (banks, map) {
-    V10.banks = banks && banks.length ? banks : null;
-    V10.bankMap = V10.banks ? map || {} : null;
-    v10SendBanks();
+    EV.banks = banks && banks.length ? banks : null;
+    EV.bankMap = EV.banks ? map || {} : null;
+    evSendBanks();
+  };
+  // Czy grają nagrania z paczki (ustawienie „Paczka F1 25” i nagrania już w wątku dźwięku)
+  A.packActive = function () {
+    var st = PG.Store && PG.Store.data && PG.Store.data.settings;
+    return !!(EV.ready && st && st.engineSound === 'pack' && EV.banks && EV.bankSent === EV.banks);
   };
 
-  function v10Post() {
-    if (V10.node) V10.node.port.postMessage(V10.buf);
-    else if (V10.eng) V10.eng.set(V10.buf);
+  function evPost() {
+    if (EV.node) EV.node.port.postMessage(EV.buf);
+    else if (EV.eng) EV.eng.set(EV.buf);
   }
 
   // Słuchacz w kamerze: pozycja, kierunek patrzenia i prędkość (do efektu Dopplera) w płaszczyźnie toru
-  function v10Listener(V, focus) {
-    var L = V10.lis, now = (window.performance ? performance.now() : Date.now()) / 1000, cam = V && V.camera;
+  function evListener(V, focus) {
+    var L = EV.lis, now = (window.performance ? performance.now() : Date.now()) / 1000, cam = V && V.camera;
     var x, y, z, fx, fz;
     if (cam && cam.position && cam.getWorldDirection && window.THREE) {
       x = cam.position.x; y = cam.position.y; z = cam.position.z;
-      var d = V10.tmp || (V10.tmp = new THREE.Vector3());
+      var d = EV.tmp || (EV.tmp = new THREE.Vector3());
       cam.getWorldDirection(d); fx = d.x; fz = d.z;
     } else { x = focus.x; y = 1.2; z = focus.y; fx = Math.cos(focus.h); fz = Math.sin(focus.h); }
     var fl = Math.sqrt(fx * fx + fz * fz);
     if (fl > 1e-4) { fx /= fl; fz /= fl; } else { fx = 1; fz = 0; }
-    var dt = now - L.t;
-    if (L.ok && dt > 0.001 && dt < 0.25) {
+    var mode = V && V.cam && V.cam.mode ? V.cam.mode : 'chase', dt = now - L.t;
+    var ax = x - fin(focus.x, x), az = z - fin(focus.y, z);
+    if ((mode === 'chase' || mode === 'far' || mode === 'cockpit' || mode === 'tcam') && ax * ax + az * az < 400) {
+      // kamera jedzie z bolidem: prędkość słuchacza = prędkość bolidu (dokładnie, bez szarpania klatek)
+      var ps = fin(focus.h, 0) + fin(focus.beta, 0), fv = fin(focus.v, 0);
+      L.vx = Math.cos(ps) * fv; L.vz = Math.sin(ps) * fv;
+    } else if (L.ok && dt > 0.001 && dt < 0.25) {
       var vx = (x - L.x) / dt, vz = (z - L.z) / dt;
       if (vx * vx + vz * vz > 150 * 150) { vx = 0; vz = 0; } // przeskok kamery
       L.vx += (vx - L.vx) * 0.3; L.vz += (vz - L.vz) * 0.3;
     } else { L.vx = 0; L.vz = 0; }
     L.x = x; L.y = fin(y, 1.2); L.z = z; L.fx = fx; L.fz = fz; L.t = now; L.ok = true;
-    L.mode = V && V.cam && V.cam.mode ? V.cam.mode : 'chase';
+    L.mode = mode;
     return L;
   }
 
   // Parametry jednego głosu dla bolidu c
-  function v10Voice(k, c, L, S, own, now) {
-    var P = V10.P, b = V10.buf, o = k * V10.NP, sl = V10.slots[k];
+  function evVoice(k, c, L, S, own, now) {
+    var P = EV.P, b = EV.buf, o = k * EV.NP, sl = EV.slots[k];
     if (sl.car !== c) { sl.car = c; sl.reset++; sl.gear = c.gear | 0; sl.free = 0; }
     var g = c.gear | 0;
     if (g > 0 && sl.gear > 0 && Math.abs(fin(c.v, 0)) > 2) { if (g > sl.gear) sl.up++; else if (g < sl.gear) sl.down++; }
@@ -119,9 +129,13 @@
     if (c.retiring) { load = 0; dmg = Math.max(dmg, 0.6); }
     var gain, pan = 0, lp = 16000, dop = 1, onb = 0;
     var dx = c.x - L.x, dz = c.y - L.z, dy = L.y - 0.6, d = Math.sqrt(dx * dx + dz * dz + dy * dy);
-    var onboard = own && (L.mode === 'cockpit' || L.mode === 'tcam');
-    if (onboard) { gain = 0.85; onb = 1; }
-    else {
+    if (own && (L.mode === 'cockpit' || L.mode === 'tcam')) { gain = 0.85; onb = 1; }
+    else if (own && (L.mode === 'chase' || L.mode === 'far')) {
+      // własny bolid z kamery za nim: stała odległość — przy dużej prędkości kamera zostaje w tyle,
+      // ale silnik nie może przez to cichnąć (maksymalne obroty mają brzmieć najmocniej)
+      var dn = L.mode === 'far' ? 10.5 : 7;
+      gain = 8 / (8 + dn); lp = 17000 / (1 + dn / 45); onb = L.mode === 'chase' ? 0.25 : 0.1;
+    } else {
       // głośność 1/r od ok. 8 m, wysokie tony słabną z odległością, za plecami słuchacza trochę ciemniej
       gain = 8 / (8 + d);
       var rx = -L.fz, rz = L.fx;
@@ -132,30 +146,27 @@
       var ps = fin(c.h, 0) + fin(c.beta, 0), cv = fin(c.v, 0);
       var vr = d > 0.5 ? ((Math.cos(ps) * cv - L.vx) * dx + (Math.sin(ps) * cv - L.vz) * dz) / d : 0;
       dop = clamp(343 / (343 + vr), 0.6, 1.7);
-      if (own) onb = L.mode === 'chase' ? 0.25 : L.mode === 'far' ? 0.1 : 0;
     }
+    // nagranie silnika producenta; nieznany producent — pierwszy bank
+    var bk = EV.bankMap ? EV.bankMap[c.team && c.team.engine] : 0;
     b[o + P.ON] = 1; b[o + P.RPM] = rpm; b[o + P.LOAD] = load; b[o + P.GAIN] = gain; b[o + P.PAN] = pan;
     b[o + P.LP] = lp; b[o + P.DOP] = dop; b[o + P.ONB] = onb; b[o + P.LIM] = lim ? 1 : 0;
     b[o + P.UP] = sl.up; b[o + P.DOWN] = sl.down; b[o + P.PIT] = pitLim ? 1 : 0; b[o + P.DMG] = dmg;
-    b[o + P.SPD] = Math.abs(fin(c.v, 0)); b[o + P.SEED] = (c.id || 0) + 1; b[o + P.RESET] = sl.reset;
-    // nagranie silnika producenta (paczka dźwięków); nieznany producent — pierwszy bank
-    var bi = 0;
-    if (V10.useBank) { var k = V10.bankMap[c.team && c.team.engine]; bi = (k == null ? 0 : k) + 1; }
-    if (P.BANK != null) b[o + P.BANK] = bi;
+    b[o + P.SPD] = Math.abs(fin(c.v, 0)); b[o + P.RESET] = sl.reset; b[o + P.BANK] = (bk == null ? 0 : bk) + 1;
   }
 
-  function v10Off() {
-    if (V10.idle || !V10.buf) return;
-    var P = V10.P;
-    for (var k = 0; k < V10.slots.length; k++) { V10.buf[k * V10.NP + P.ON] = 0; V10.slots[k].car = null; V10.slots[k].free = 99; }
-    v10Post(); V10.idle = true;
+  function evOff() {
+    if (EV.idle || !EV.buf) return;
+    var P = EV.P;
+    for (var k = 0; k < EV.slots.length; k++) { EV.buf[k * EV.NP + P.ON] = 0; EV.slots[k].car = null; EV.slots[k].free = 99; }
+    evPost(); EV.idle = true;
   }
 
   // Klatka: bolid w kamerze (głos 0) i najbliżsi rywale (głosy 1..)
   var near = [];
-  function v10Frame(car, S, V) {
-    var L = v10Listener(V, car), now = L.t, P = V10.P, nv = V10.slots.length, k, i;
-    v10Voice(0, car, L, S, true, now);
+  function evFrame(car, S, V) {
+    var L = evListener(V, car), now = L.t, P = EV.P, nv = EV.slots.length, k, i;
+    evVoice(0, car, L, S, true, now);
     // najbliżsi rywale; przydział do głosów stały, póki bolid jest w zasięgu
     near.length = 0;
     var cars = S && S.cars ? S.cars : [];
@@ -168,23 +179,23 @@
     near.sort(function (a, b) { return a._aD - b._aD; });
     if (near.length > nv - 1) near.length = nv - 1;
     for (k = 1; k < nv; k++) {
-      var s = V10.slots[k];
+      var s = EV.slots[k];
       if (s.car && near.indexOf(s.car) < 0) { s.car = null; s.free = 0; }
-      if (!s.car) { s.free++; V10.buf[k * V10.NP + P.ON] = 0; }
+      if (!s.car) { s.free++; EV.buf[k * EV.NP + P.ON] = 0; }
     }
     for (i = 0; i < near.length; i++) {
       var cc = near[i], at = -1;
-      for (k = 1; k < nv; k++) if (V10.slots[k].car === cc) { at = k; break; }
+      for (k = 1; k < nv; k++) if (EV.slots[k].car === cc) { at = k; break; }
       if (at < 0) {
         // wolny głos: najpierw ten, który już wybrzmiał
         var best = -1;
-        for (k = 1; k < nv; k++) if (!V10.slots[k].car && (best < 0 || V10.slots[k].free > V10.slots[best].free)) best = k;
+        for (k = 1; k < nv; k++) if (!EV.slots[k].car && (best < 0 || EV.slots[k].free > EV.slots[best].free)) best = k;
         if (best < 0) continue;
         at = best;
       }
-      v10Voice(at, cc, L, S, false, now);
+      evVoice(at, cc, L, S, false, now);
     }
-    v10Post(); V10.idle = false;
+    evPost(); EV.idle = false;
   }
 
   A.init = function () {
@@ -193,7 +204,7 @@
     if (!AC) return;
     var c = A.ctx = new AC();
     A.master = c.createGain(); A.master.gain.value = A.on ? A.vol : 0; A.master.connect(c.destination);
-    // silnik: dwa oscylatory + filtr
+    // silnik klasyczny: dwa oscylatory + filtr
     A.eng = c.createGain(); A.eng.gain.value = 0;
     var f = A.filt = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1200; f.Q.value = 4;
     A.o1 = c.createOscillator(); A.o1.type = 'sawtooth';
@@ -221,33 +232,30 @@
     A.sqO = c.createOscillator(); A.sqO.type = 'triangle'; A.sqO.frequency.value = 1800;
     A.sqOG = c.createGain(); A.sqOG.gain.value = 0;
     A.sqO.connect(A.sqOG); A.sqOG.connect(A.master); A.sqO.start();
-    // silniki V10 (AudioWorklet albo zapasowo w wątku głównym)
-    try { v10Init(c); } catch (e) { console.warn('Dźwięk V10 niedostępny', e); }
+    // silniki z nagrań paczki (AudioWorklet albo zapasowo w wątku głównym)
+    try { evInit(c); } catch (e) { console.warn('Dźwięk silników z paczki niedostępny', e); }
   };
 
   A.setOn = function (on) { A.on = on; if (A.master) A.master.gain.value = on ? A.vol : 0; };
   A.setVol = function (v) { A.vol = v; if (A.master && A.on) A.master.gain.value = v; };
 
-  // Dźwięk bolidu w kamerze (car) i — z silnikami V10 — rywali w pobliżu (S: sesja, V: widok 3D z kamerą)
+  // Dźwięk bolidu w kamerze (car) i — z paczką F1 25 — rywali w pobliżu (S: sesja, V: widok 3D z kamerą)
   A.engine = function (car, active, others, S, V) {
     if (!A.ctx) return;
     var t = A.ctx.currentTime;
-    var st = PG.Store && PG.Store.data && PG.Store.data.settings;
-    var useV10 = V10.ready && !(st && st.engineSound === 'simple');
-    V10.useBank = !!(st && st.engineSound === 'pack' && V10.banks && V10.bankSent === V10.banks);
     if (!active || !car) {
       A.eng.gain.setTargetAtTime(0, t, 0.08); A.skidG.gain.setTargetAtTime(0, t, 0.05); A.crowdG.gain.setTargetAtTime(0, t, 0.2);
       if (A.sqG) { A.sqG.gain.setTargetAtTime(0, t, 0.05); A.sqOG.gain.setTargetAtTime(0, t, 0.05); }
-      v10Off();
+      evOff();
       return;
     }
     var rpm = fin(car.rpm, 4500), thr = fin(car.throttle, 0), av = Math.abs(fin(car.v, 0));
-    if (useV10 && A.on) {
+    if (A.packActive() && A.on) {
       A.eng.gain.setTargetAtTime(0, t, 0.05);
-      v10Frame(car, S, V);
+      evFrame(car, S, V);
     } else {
-      v10Off();
-      // dawny, prosty silnik (obroty V10 przeliczone na jego dawną skalę wysokości dźwięku)
+      evOff();
+      // silnik klasyczny (obroty przeliczone na dawną skalę wysokości dźwięku: 19 000 → 12 500)
       var fr = rpm * 0.66 / 60 * 1.6;
       A.o1.frequency.setTargetAtTime(fr, t, 0.02);
       A.o2.frequency.setTargetAtTime(fr * 2.005, t, 0.02);
