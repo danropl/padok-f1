@@ -1,6 +1,6 @@
 # WORLD GP
 
-Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
+Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników V10 (także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
 
@@ -50,9 +50,9 @@ Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕`
 **Ustawienia → Jazda → Skrzynia biegów: Ręczna** (także w menu pauzy). Domyślnie skrzynia jest automatyczna, a AI zawsze jeździ z automatem.
 
 - Zmiana biegów: klawiatura `X` w górę, `Z` w dół (albo `+` / `−` na klawiaturze numerycznej); pad `R1` w górę, `L1` w dół. Przy ręcznej skrzyni DRS na padzie jest pod `✕`, a zjazd do boksu pod `Create` albo `L3`. Na telefonie pojawiają się przyciski `+` i `−`.
-- Pełna moc jest od ok. 8000 obr./min. Na za wysokim biegu silnik słabnie, a na końcu biegu działa ogranicznik obrotów (bieg na wyświetlaczu robi się niebieski).
+- Pełna moc jest od ok. 12 000 obr./min (silnik V10 kręci się do 19 000). Na za wysokim biegu silnik słabnie, a na końcu biegu działa ogranicznik obrotów (bieg na wyświetlaczu robi się niebieski).
 - Redukcja, po której silnik przekroczyłby obroty, jest blokowana. Niższy bieg mocniej hamuje silnikiem.
-- Kto zmienia biegi przy ok. 12 000 obr./min, jest prawie tak szybki jak automat (0–200 km/h: 4,7 s wobec 4,6 s).
+- Kto zmienia biegi przy ok. 18 500 obr./min (zapalone prawie wszystkie diody), jest prawie tak szybki jak automat (0–200 km/h: 4,7 s wobec 4,6 s).
 - Aleja serwisowa, powrót na tor (`R`) i przejęcie bolidu przez AI ustawiają bieg automatycznie.
 
 ## Weekend wyścigowy
@@ -78,6 +78,17 @@ Działają w Chrome i Edge (WebHID), gdy gra jest otwarta z `localhost` albo `ht
 - **L2 (hamulec):** opór twardnieje w miarę wciskania jak pedał hamulca (mocniej przy dużej prędkości), drży przy pracy ABS, odbija przy blokowaniu kół.
 - **R2 (gaz):** lekka sprężyna, szarpnięcie przy zmianie biegu w górę, drżenie na ograniczniku obrotów, przy buksowaniu, pracy kontroli trakcji, na żwirze, trawie i krawężnikach.
 
+## Dźwięk silników V10
+
+Silniki brzmią jak V10 z F1 lat 2000–2005. Dźwięk jest syntezowany na bieżąco, bez nagrań:
+
+- **Obroty:** do 19 000 obr./min, 10 zapłonów na dwa obroty wału (przy 18 000 obr./min 1500 na sekundę). Przełożenia są stałe, więc na każdym biegu obroty rosną liniowo z prędkością, a po zmianie w górę spadają o ok. 20%. Diody na kierownicy i pasek obrotów zapalają się od ok. 15 000 obr./min.
+- **Model:** impulsy ciśnienia z dwóch rzędów cylindrów przez osobne rury wydechowe, dolot z rezonansem airboksu, rozrzut spalania między zapłonami. Każdy bolid ma trochę inny charakter brzmienia.
+- **Zachowanie:** strzały z wydechu po odpuszczeniu gazu, krótka przerwa zapłonu przy zmianie biegu w górę, przegazówka przy redukcji, ogranicznik obrotów, ogranicznik prędkości w alei serwisowej, wypadanie zapłonów przy uszkodzonym silniku. Na polach startowych przy zapalonych światłach rywale trzymają obroty.
+- **Słuchacz w kamerze:** z kokpitu i T-kamery słychać dolot i silnik z bliska, z zewnątrz głównie wydech. Słychać też do 4 najbliższych rywali, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej).
+- **Ustawienia → Dźwięk → Silniki:** V10 albo Prosty (dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia).
+- Synteza działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`. Z innego adresu ten sam dźwięk liczy się w wątku głównym.
+
 ## Grafika 3D
 
 Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczach wokół kamery, asfalt z kruszywem i smugami gumy w strefach hamowania, żwir z otoczaków. W kamerze z kokpitu (`C`) widać szczegółowe wnętrze: kierownicę z wyświetlaczem (bieg, prędkość, czasy, DRS, ERS), diodami obrotów, przyciskami i pokrętłami, dłonie w rękawicach skręcające razem z kierownicą.
@@ -99,7 +110,8 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/sprites.js` | ikony bolidów, kasków i flag w menu i kreatorze |
 | `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, drzewa, trawa, kamery, postprocessing |
 | `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, dłonie) |
-| `js/audio.js` | dźwięk silnika i efekty (Web Audio) |
+| `js/audio.js` | dźwięk: silniki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
+| `js/v10.js` | synteza dźwięku silnika V10 (AudioWorklet, zapasowo w wątku głównym) |
 | `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/game.js` | pętla gry |
 | `serve.py`, `start.command`, `start.bat` | lokalny serwer bez pamięci podręcznej i uruchamianie z aktualizacją |

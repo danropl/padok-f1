@@ -12,7 +12,7 @@
   function now() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   // ---------- USTAWIENIA: domyślne wartości nowych kluczy (career.js zostaje bez zmian) ----------
-  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto' };
+  var SET_DEF = { autoDrs: true, abs: false, tc: true, damage: 'full', haptics: true, hapticsGain: 0.8, trig: true, trigGain: 0.8, post: true, gearbox: 'auto', engineSound: 'v10' };
   G.mergeSettings = function () {
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     if (!st) return;
@@ -25,6 +25,7 @@
     delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
     st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
     if (st.gearbox !== 'manual') st.gearbox = 'auto';
+    if (st.engineSound !== 'simple') st.engineSound = 'v10';
   };
   G.assistOpts = function () {
     var st = PG.Store.data.settings;
@@ -483,7 +484,7 @@
       G.hudT -= dt;
       G.updateHud(G.hudT <= 0);
       if (G.hudT <= 0) G.hudT = 0.25;
-      PG.Audio.engine(S.player, !G.paused, S.state === 'lights' ? 0 : 0.02);
+      PG.Audio.engine(S.player, !G.paused, S.state === 'lights' ? 0 : 0.02, S, G.V);
     } else PG.Audio.engine(null, false);
   };
 
@@ -737,7 +738,8 @@
     setText(H.spd, String(kmh));
     setText(H.gear, p.gear === 0 ? 'R' : !p.manual && kmh < 2 && p.throttle === 0 ? 'N' : String(p.gear));
     if (H.gear && H.gear._lim !== !!p.limiter) { H.gear._lim = !!p.limiter; H.gear.classList.toggle('lim', H.gear._lim); }
-    var segs = H.rpm.length, on = Math.round((p.rpm - 4200) / 8300 * segs);
+    // światła zmiany biegu jak w F1: pasek zapala się w górnym zakresie obrotów V10 (12 000–19 000)
+    var segs = H.rpm.length, on = Math.round((p.rpm - 12000) / 7000 * segs);
     if (on !== G.rpmOn) {
       G.rpmOn = on;
       for (var i = 0; i < segs; i++) H.rpm[i].className = (i < on ? 'on ' : '') + (i < 8 ? 'g' : i < 12 ? 'r' : 'b');

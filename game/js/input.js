@@ -283,7 +283,7 @@
     var t = now(), v = Math.abs(num(car.v, 0)), sf = clamp(v / 25, 0, 1), s = 0, w = 0, i;
     dt = clamp(num(dt, 0.016), 0, 0.1);
     // silnik: delikatne brzęczenie zależne od obrotów i gazu
-    var rpm = clamp((num(car.rpm, 4000) - 4000) / 9000, 0, 1), thr = clamp(num(car.throttle, 0), 0, 1);
+    var rpm = clamp((num(car.rpm, 4500) - 4500) / 14500, 0, 1), thr = clamp(num(car.throttle, 0), 0, 1);
     w = soft(w, 0.025 + 0.075 * rpm * (0.3 + 0.7 * thr));
     // nawierzchnia
     var surf = car.surface;
@@ -614,7 +614,7 @@
     if (on && car && gain > 0.01) {
       var g = Math.min(1, gain * 1.25), v = Math.abs(num(car.v, 0)), i;
       var lk = clamp(num(car.lock, 0), 0, 1), abs = clamp(num(car.absAct, 0), 0, 1), ws = clamp(num(car.wspin, 0), 0, 1), tc = clamp(num(car.tcAct, 0), 0, 1);
-      var thr = clamp(num(car.throttle, 0), 0, 1), rpm = num(car.rpm, 8000), surf = car.surface, sf = clamp(v / 25, 0, 1);
+      var thr = clamp(num(car.throttle, 0), 0, 1), rpm = num(car.rpm, 12000), surf = car.surface, sf = clamp(v / 25, 0, 1);
       // L2
       if (lk > 0.25 && v > 3) trigVibration(TL, 1, Math.max(1, (3 + 5 * lk) * g), 22 + 14 * lk);
       else if (abs > 0.12 && v > 3) trigVibration(TL, 2, Math.max(1, (2 + 3 * abs) * g), 15 + 5 * abs);
@@ -628,8 +628,8 @@
       if (DS.gear && gear > DS.gear && thr > 0.5 && v > 3) DS.kickT = t + 90;
       DS.gear = gear;
       if (t < DS.kickT) trigVibration(TR, 2, Math.max(1, 6 * g), 34);
-      else if (rpm >= 12600 && thr > 0.8) trigVibration(TR, 6, Math.max(1, 3 * g), 140);
-      else if (ws > 0.15 && v > 0.5) trigVibration(TR, 2, Math.max(1, (2 + 5 * ws) * g), 35 + 30 * clamp((rpm - 6000) / 7000, 0, 1));
+      else if ((car.limiter || rpm >= 18900) && thr > 0.8) trigVibration(TR, 6, Math.max(1, 3 * g), 140);
+      else if (ws > 0.15 && v > 0.5) trigVibration(TR, 2, Math.max(1, (2 + 5 * ws) * g), 35 + 30 * clamp((rpm - 9000) / 10000, 0, 1));
       else if (tc > 0.2 && thr > 0.3) trigVibration(TR, 4, Math.max(1, (1 + 2 * tc) * g), 55);
       else if ((surf === 'gravel' || surf === 'grass') && v > 4) trigVibration(TR, 1, Math.max(1, (surf === 'gravel' ? 4 : 3) * sf * g), surf === 'gravel' ? 24 : 16);
       else if (surf === 'kerb' && v > 8) trigVibration(TR, 1, Math.max(1, 3 * sf * g), 30);

@@ -15,6 +15,13 @@
   };
 
   var GEAR_TOP = [0, 82, 118, 154, 190, 228, 266, 306, 360]; // km/h
+  // Silnik V10 (3,0 l, jak w F1 2000–2005). Przełożenia są stałe, więc obroty rosną liniowo z prędkością:
+  // top — obroty przy prędkości końca biegu (GEAR_TOP), idle — bieg jałowy, launch — obroty przy ruszaniu
+  // na pełnym gazie (sprzęgło się ślizga, dopóki prędkość ich nie dogoni).
+  var RPM = { idle: 4500, top: 19000, launch: 13500 };
+  // Automat: w górę przy 97 % obrotów końca biegu, w dół dopiero gdy na niższym biegu byłoby 86 %
+  // (histereza: przy stałej prędkości bieg nie przeskakuje)
+  var UP_AT = 0.97, DOWN_AT = 0.86;
 
   function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
 
@@ -123,8 +130,8 @@
     if (car.shiftT > 0) return 0;
     if (kmh >= top * 0.995) return 0;
     if (g === 1) return 1;
-    var rpm = 12500 * kmh / top;
-    return rpm >= 8000 ? 1 : clamp(0.25 + 0.75 * (rpm - 3000) / 5000, 0.25, 1);
+    var r = kmh / top; // obroty jako ułamek obrotów końca biegu: pełna moc od 64 % (ok. 12 000 obr./min)
+    return r >= 0.64 ? 1 : clamp(0.25 + 0.75 * (r - 0.24) / 0.4, 0.25, 1);
   }
 
   // Zmiana biegu (ręczna skrzynia). dir: +1 w górę, −1 w dół.
@@ -142,11 +149,18 @@
     car.mgear = g - 1;
     return 'down';
   };
-  // Bieg, który wybrałaby skrzynia automatyczna przy prędkości v (m/s)
-  PG.autoGear = function (v) {
-    var kmh = Math.abs(v) * 3.6, g = 1;
-    while (g < 8 && kmh > GEAR_TOP[g] * 0.97) g++;
+  // Skrzynia automatyczna: bieg po poprzednim biegu (prev) i prędkości (km/h), z histerezą
+  PG.autoGear = function (prev, kmh) {
+    var g = prev >= 1 && prev <= 8 ? prev | 0 : 1;
+    while (g < 8 && kmh > GEAR_TOP[g] * UP_AT) g++;
+    while (g > 1 && kmh < GEAR_TOP[g - 1] * DOWN_AT) g--;
     return g;
+  };
+  // Obroty silnika na biegu g przy prędkości kmh i gazie thr (na jedynce sprzęgło pozwala ruszyć na obrotach)
+  PG.engineRpm = function (g, kmh, thr) {
+    var r = RPM.top * kmh / GEAR_TOP[g];
+    if (g === 1) r = Math.max(r, RPM.idle + (RPM.launch - RPM.idle) * clamp(thr || 0, 0, 1));
+    return Math.min(RPM.top + 300, Math.max(RPM.idle, r));
   };
 
   // Krok fizyki dla jednego bolidu
@@ -280,7 +294,7 @@
     }
     acc -= cd * v * av + (v > 0 ? 0.2 : v < 0 ? -0.2 : 0);
     // ręczna skrzynia: hamowanie silnikiem rośnie z obrotami (niski bieg = mocniej)
-    if (car.manual && human && thr === 0 && v > 5) acc -= 1.6 * clamp((12500 * av * 3.6 / GEAR_TOP[car.mgear || 1] - 4000) / 8500, 0, 1);
+    if (car.manual && human && thr === 0 && v > 5) acc -= 1.6 * clamp((av * 3.6 / GEAR_TOP[car.mgear || 1] - 0.32) / 0.68, 0, 1);
     if (car.shiftT > 0) car.shiftT -= dt;
     acc -= surfDrag * (v > 0 ? 1 : v < 0 ? -1 : 0);
 
@@ -384,21 +398,10 @@
       }
     }
     // biegi i obroty (dźwięk, HUD)
-    var kmh = Math.abs(car.v) * 3.6, g = 1;
-    if (car.manual && human) {
-      // ręczna skrzynia: obroty wprost z prędkości na wybranym biegu (12 500 obr./min na końcu biegu)
-      var gm = car.mgear || 1, topM = GEAR_TOP[gm], rpmM = 12500 * kmh / topM;
-      if (gm === 1 && kmh < topM * 0.6) rpmM = Math.max(rpmM, 4200 + 6000 * thr); // sprzęgło przy ruszaniu
-      car.gear = car.v < -0.5 ? 0 : gm;
-      car.limiter = kmh >= topM * 0.995;
-      car.rpm = car.limiter ? 12650 + Math.random() * 250 : Math.min(12900, Math.max(4000, rpmM) + car.wspin * 2000);
-    } else {
-      while (g < 8 && kmh > GEAR_TOP[g] * 0.97) g++;
-      car.gear = car.v < -0.5 ? 0 : g;
-      var lo = GEAR_TOP[g - 1] * 0.82, hi = GEAR_TOP[g];
-      car.rpm = Math.min(12900, 4200 + 8300 * Math.max(0, Math.min(1, (kmh - lo) / (hi - lo))) + car.wspin * 2000);
-      car.limiter = false;
-    }
+    var kmh = Math.abs(car.v) * 3.6, g = car.manual && human ? (car.mgear || 1) : PG.autoGear(car.gear, kmh);
+    car.gear = car.v < -0.5 ? 0 : g;
+    car.limiter = kmh >= GEAR_TOP[g] * 0.995;
+    car.rpm = car.limiter ? RPM.top - 150 + Math.random() * 300 : PG.engineRpm(g, kmh, thr) + car.wspin * 3000;
     // zużycie opon
     var usage = Math.min(1.5, Math.abs(car.latAcc || 0) / 35 + (brk > 0 ? 0.3 : 0) + car.skid * 1.5);
     var tw = PG.TYRES[car.compound] || PG.TYRES.M;
@@ -545,4 +548,5 @@
   };
 
   PG.GEAR_TOP = GEAR_TOP;
+  PG.RPM = RPM;
 })(PG);

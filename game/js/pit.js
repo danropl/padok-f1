@@ -132,14 +132,15 @@
     c.idx = ni; c.dist += (s1 - s0) * ds; c.lat = lat;
     c.steer = 0; c.beta = 0; c.skid = 0; c.lock = 0; c.wspin = 0; c.surface = 'asphalt'; c.wall = 0; c.drsOpen = false;
     c.slip = 1; c.dirty = 0; c.latAcc = 0;
-    var kmh = c.v * 3.6, g = 1, GT = PG.GEAR_TOP;
-    while (g < 8 && kmh > GT[g] * 0.97) g++;
+    var kmh = c.v * 3.6, g = PG.autoGear(c.gear, kmh);
     c.gear = g;
-    c.rpm = Math.min(12900, 4200 + 8300 * clamp((kmh - GT[g - 1] * 0.82) / (GT[g] - GT[g - 1] * 0.82), 0, 1));
+    c.rpm = PG.engineRpm(g, kmh, c.throttle);
+    c.limiter = false;
+    c.pitLim = pt.ph !== 'stop' && pt.s >= sLimA && pt.s < sLimB; // ogranicznik prędkości (słychać go)
     if (!(isFinite(c.x) && isFinite(c.y))) { c.x = px; c.y = py; }
     // koniec alei: z powrotem na torze
     if (pt.ph === 'out' && s1 >= sExit) {
-      c.pit = null; c.inPit = false; c.offset = 0; c.offsetTarget = 0; c.steerIn = 0;
+      c.pit = null; c.inPit = false; c.offset = 0; c.offsetTarget = 0; c.steerIn = 0; c.pitLim = false;
       c.pitCount = (c.pitCount || 0) + 1;
       S.events.push({ type: 'pitout', car: c });
     }

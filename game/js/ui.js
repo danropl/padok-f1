@@ -325,6 +325,8 @@
     dp.appendChild(h('div', { class: 'field' }, 'Dźwięk', seg([[true, 'Włączony'], [false, 'Wyłączony']], st.sound, function (v) { st.sound = v; PG.Audio.setOn(v); Store.save(); })));
     var vol = h('input', { type: 'range', id: 'vol', min: 0, max: 100, value: Math.round(st.vol * 100), oninput: function () { st.vol = vol.value / 100; PG.Audio.setVol(st.vol); Store.save(); } });
     dp.appendChild(h('label', { class: 'field' }, 'Głośność', vol));
+    dp.appendChild(h('div', { class: 'field' }, 'Silniki', seg([['v10', 'V10'], ['simple', 'Prosty']], st.engineSound === 'simple' ? 'simple' : 'v10', function (v) { st.engineSound = v; Store.save(); })));
+    dp.appendChild(note('V10: dźwięk silników z F1 lat 2000–2005 (do 19 000 obr./min), słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera. Prosty: dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia.'));
     dp.appendChild(h('h3', { text: 'Zapis gry', style: 'margin-top:6px' }));
     var del = h('button', { type: 'button', class: 'danger', text: 'Usuń zapis gry' });
     del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () {

@@ -311,7 +311,8 @@
     var v = Math.abs(num(car.v, 0)), thr = clamp(num(car.throttle, 0), 0, 1), brk = clamp(num(car.brake, 0), 0, 1);
     o.ers = clamp(o.ers + dt * (brk * 0.22 * Math.min(1, v / 20) - (thr > 0.9 && v > 30 ? 0.035 : 0) + 0.004), 0, 1);
     // diody obrotów
-    var rpm = num(car.rpm, 4000), lit = Math.round(clamp((rpm - 9200) / (12500 - 9200), 0, 1) * 15), lim = rpm >= 12600;
+    // diody zmiany biegu: od 15 000 do 18 800 obr./min (V10), niebieskie na ograniczniku
+    var rpm = num(car.rpm, 4500), lit = Math.round(clamp((rpm - 15000) / 3800, 0, 1) * 15), lim = !!car.limiter || rpm >= 18900;
     o.blink += dt;
     var ph = lim ? (Math.floor(o.blink * 10) % 2) : 0, key = lim ? 'L' + ph : 'n' + lit;
     if (key !== o.ledKey) {
