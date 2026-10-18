@@ -54,7 +54,7 @@
   function Voice(sr, idx, eng) {
     this.sr = sr; this.idx = idx; this.eng = eng || null;
     // nagrania: bank, 4 strumienie ziaren (mikrofon A gaz/bez gazu, mikrofon B gaz/bez gazu), bufory bloku
-    this.bk = null; this.st = [new Stream(), new Stream(), new Stream(), new Stream()];
+    this.bk = null; this.limOn = false; this.st = [new Stream(), new Stream(), new Stream(), new Stream()];
     this.acc = new Float64Array(128); this.rb = new Float32Array(128); this.wOn = new Float32Array(128); this.wOff = new Float32Array(128);
     this.pcE = 0; this.pcP = 0; this.pbE = 0; this.pbF = 0; this.pbPh = 0;
     this.rng = (0x9E3779B9 ^ Math.imul(idx + 1, 0x85EBCA6B)) >>> 0 || 1;
@@ -327,8 +327,8 @@
   // ziarno to dwa cykle z oknem Hanna wokół znacznika, co jeden cykl wchodzi następne. Odstęp między ziarnami
   // to okres cyklu przy docelowych obrotach, a szybkość odczytu dopasowuje wysokość dźwięku. Ziarna idą po kolei
   // jak w nagraniu, wahadłowo w oknie kilkunastu cykli wokół miejsca o właściwych obrotach (brzmienie nie zastyga),
-  // z głośnością miejsca docelowego; przy ograniczniku i na jałowych kursor wędruje po stałym zakresie z końca
-  // nagrania. Między nagraniem z gazem i bez gazu przejście o stałej mocy, mikrofon B (bliżej silnika) z kokpitu.
+  // z głośnością miejsca docelowego; przy ograniczniku i na jałowych gra w pętli stały zakres z końca nagrania.
+  // Między nagraniem z gazem i bez gazu przejście o stałej mocy, mikrofon B (bliżej silnika) z kokpitu.
   var HN = 1024, HANN = new Float32Array(HN + 1), EQP = new Float32Array(HN + 1);
   for (var hi = 0; hi <= HN; hi++) { HANN[hi] = 0.5 + 0.5 * Math.cos(Math.PI * hi / HN); EQP[hi] = Math.sin(Math.PI / 2 * hi / HN); }
 
@@ -369,16 +369,13 @@
   // więc połączenia są gładkie. Daleki skok tylko przy dużej zmianie obrotów (zmiana biegu, start).
   Voice.prototype.pick = function (st, Ly, R) {
     var b = Ly.b, z = Ly.z, cur = st.cur, c, d, s;
-    var inPl = z - b >= 8 && (Ly.up ? R >= Ly.pt * (st.plat ? 0.992 : 1) : R <= Ly.pt * (st.plat ? 1.008 : 1));
+    var inPl = z - b >= 8 && (Ly.up ? this.limOn || R >= Ly.pt * (st.plat ? 0.992 : 1) : R <= Ly.pt * (st.plat ? 1.008 : 1));
     if (inPl) {
-      // stały zakres z końca nagrania (ogranicznik, jałowe): wahadło, zawracanie w losowych miejscach
-      if (!st.plat || cur < b || cur > z) { c = b + ((this.rand() * Math.min(8, (z - b) >> 1)) | 0); st.dir = 1; st.W = 0; }
-      else {
-        c = cur + st.dir;
-        if (st.dir > 0 && c > z - st.W) { st.dir = -1; c = cur - 1; st.W = this.rand() * (z - b) * 0.3; }
-        else if (st.dir < 0 && c < b + st.W) { st.dir = 1; c = cur + 1; st.W = this.rand() * (z - b) * 0.3; }
-      }
-      st.plat = true; st.cur = c; st.vt = 0; st.ga = 1;
+      // stały zakres z końca nagrania (ogranicznik, jałowe): pętla do przodu, jak nagrano (ls..le)
+      var ls = Ly.ls || b, le = Ly.le || z;
+      if (st.plat && cur >= b && cur <= z) { c = cur + 1; if (c > le) c = ls; }
+      else c = cur + 1 === b ? b : ls + ((this.rand() * 4) | 0);
+      st.plat = true; st.cur = c; st.vt = 0; st.ga = 1; st.dir = 1;
       return c;
     }
     var t = lidx(Ly, R);
@@ -459,13 +456,17 @@
     var lim = t[P.LIM] > 0.5, pit = t[P.PIT] > 0.5, dmg = t[P.DMG], spd = t[P.SPD], onb = this.onb;
     var sc = (bk.top - bk.idle) / 14500, rb = this.rb, wOn = this.wOn, wOff = this.wOff;
     var liftK = 1 - Math.exp(-1 / (1.2 * sr));
+    // ogranicznik obrotów: nagranie z końca przemiatania (silnik na ograniczniku, tak jak w F1 25),
+    // na równych obrotach ogranicznika, bez dokładania przerw w zapłonie (brzmiałyby jak niskie obroty)
+    this.limOn = lim;
+    if (lim) tRpm = 19000;
     for (i = 0; i < n; i++) {
       this.rpm += (tRpm - this.rpm) * kR;
       this.gain += (tGain - this.gain) * kG;
-      // ogranicznik obrotów (ok. 17 Hz) i w alei (ok. 11 Hz): przerwy w zapłonie seriami
-      if (lim || pit) {
-        this.cutPh += (pit ? 11 : 17) / sr;
-        if (this.cutPh >= 1) { this.cutPh -= 1; this.cutDuty = (pit ? 0.42 : 0.4) + 0.2 * this.rand(); }
+      // ogranicznik prędkości w alei (ok. 11 Hz): przerwy w zapłonie seriami
+      if (pit) {
+        this.cutPh += 11 / sr;
+        if (this.cutPh >= 1) { this.cutPh -= 1; this.cutDuty = 0.42 + 0.2 * this.rand(); }
         this.limCut = this.cutPh > 1 - this.cutDuty;
       } else this.limCut = false;
       this.limEnv += ((this.limCut ? 1 : 0) - this.limEnv) * 0.002;
@@ -474,7 +475,7 @@
       var tl = tLoad;
       if (this.blipT > 0) tl = Math.max(tl, 0.8);                    // międzygaz przy redukcji
       if (this.cutT > 0) tl = 0;                                      // przerwa zapłonu przy zmianie w górę
-      else if (this.limCut) tl = pit ? 0.05 : 0.15;
+      else if (this.limCut) tl = 0.05;
       this.load += (tl - this.load) * kL;
       var ld = this.load;
       if (this.lastLoad > 0.5 && ld < 0.1) this.lift = 1;

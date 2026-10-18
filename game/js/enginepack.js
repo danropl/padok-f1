@@ -134,8 +134,32 @@
     }
     e2[M - 1] = e2[M - 2];
     for (i = 0; i < M; i++) { var sv = 0, cn = 0; for (k = Math.max(0, i - 3); k <= Math.min(M - 1, i + 3); k++) { sv += e2[k]; cn++; } lv[i] = Math.sqrt(sv / cn) + 1; }
+    // pętla w stałym zakresie (ogranicznik, jałowe) grana do przodu, jak nagrano: koniec le i początek ls
+    // dobrane tak, by cykl le był jak najbardziej podobny do cyklu ls−1 (wtedy przejście jest niesłyszalne)
+    var ls = b, le = z;
+    if (z - b >= 24) {
+      var K = 128, cyc = function (j) {
+        var o = new Float64Array(K), a0 = mk[j], st = (mk[j + 1] - a0) / K, mean = 0, nn = 0, q;
+        for (q = 0; q < K; q++) { var x = a0 + q * st, xi = Math.floor(x), fr = x - xi; o[q] = pcm[xi] + (pcm[xi + 1] - pcm[xi]) * fr; mean += o[q]; }
+        mean /= K;
+        for (q = 0; q < K; q++) { o[q] -= mean; nn += o[q] * o[q]; }
+        nn = Math.sqrt(nn) || 1;
+        for (q = 0; q < K; q++) o[q] /= nn;
+        return o;
+      };
+      var best = -2, span = Math.min(12, (z - b) >> 2), starts = [];
+      for (k = b + 1; k <= b + span; k++) starts.push(cyc(k - 1));
+      for (var e = z - span; e <= z; e++) {
+        var ce = cyc(e);
+        for (k = 0; k < starts.length; k++) {
+          var r = 0, cs = starts[k];
+          for (var q2 = 0; q2 < K; q2++) r += ce[q2] * cs[q2];
+          if (r > best) { best = r; ls = b + 1 + k; le = e; }
+        }
+      }
+    }
     return {
-      pcm: pcm, sr: sr, mk: mk, per: per, rpm: rpm, rf: rf, wn: wn, lv: lv, a: a, b: b, z: z, up: up, pr: pr, re: re, rs: rpm[a],
+      pcm: pcm, sr: sr, mk: mk, per: per, rpm: rpm, rf: rf, wn: wn, lv: lv, a: a, b: b, z: z, ls: ls, le: le, up: up, pr: pr, re: re, rs: rpm[a],
       a2: a + Math.min(20, (b - a) >> 3), // początek nagrania (otwarcie/zamknięcie przepustnicy) tylko po skoku, nie w wahadle
       pt: up ? Math.min(re, pr) * 0.998 : Math.max(re, pr) * 1.002, // od tych obrotów stały zakres (ogranicznik / jałowe)
       rms: Math.sqrt(ss / Math.max(1, (s1 - s0) / 2)) / 32768, cyl: sec.cyl
