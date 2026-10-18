@@ -140,7 +140,13 @@
     var asc = PG.findMark(T, 'Variante Ascari'), rog = PG.findMark(T, 'Variante della Roggia'), les1 = PG.findMark(T, 'Curva di Lesmo 1');
     // aleja serwisowa po prawej stronie prostej startowej
     var p0 = T.pit ? T.pit.from : wrapI(T.mainFrom + m(40), N), p1 = T.pit ? T.pit.to : wrapI(ret - m(180), N);
-    band(p0, p1, hw + 4.2, hw + 13, 'pitlane');
+    if (T.pit && T.pitA) {
+      // droga alei od zjazdu do wyjazdu: krawędzie zmienne (T.pitA / T.pitB z track.js)
+      var pts = [], pe = T.pit.entry, px = T.pit.exit, pi;
+      for (pi = pe; pi !== wrapI(px + 1, N); pi = wrapI(pi + 1, N)) pts.push(P(pi, T.pitA[pi]));
+      for (pi = px; pi !== wrapI(pe - 1, N); pi = wrapI(pi - 1, N)) pts.push(P(pi, T.pitB[pi]));
+      var po = { kind: 'pitlane', pts: pts }; bbox(po); sc.push(po);
+    } else band(p0, p1, hw + 4.2, hw + 13, 'pitlane');
     band(p0, p1, hw + 3, hw + 4.2, 'wall');
     // budynek boksów z garażami
     var gStart = wrapI(-m(260), N);
@@ -200,6 +206,7 @@
         var side = dx * T.nx[gi] + dy * T.ny[gi] > 0;
         var lim = (side ? T.barR[gi] : T.barL[gi]) + 9;
         if (PG.inRun(gi, T.mainFrom, T.mainTo) || gi < 140 || gi > T.N - 200) lim = side ? T.hw + 90 : T.hw + 50;
+        if (side && T.pitB && T.pitB[gi] > 0) lim = Math.max(lim, T.pitB[gi] + 14); // droga zjazdu i wyjazdu z alei
         if (d < lim) continue;
       }
       var blocked = false;

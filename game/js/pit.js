@@ -62,14 +62,31 @@
     if (!P || !c.pitReq || c.pit || c.finished || c.retired || c.retiring || S.mode !== 'race' || S.state === 'lights') return;
     var N = T.N, a = wrapI(prevIdx - P.entry, N), b = wrapI(c.idx - P.entry, N);
     if (!(a > N / 2 && b < N / 8)) return;
+    enter(c, S, b, false);
+  };
+
+  function enter(c, S, s, free) {
     var dmg = c.dmg || {};
     c.pit = {
-      ph: 'in', s: b, lat0: c.lat || 0, box: boxOf(c, S), t: 0, comp: c.pitComp || Pit.suggest(c, S),
-      fixFW: Math.max(dmg.fwL || 0, dmg.fwR || 0) > 0.2, fixRW: (dmg.rw || 0) > 0.35, stopT: 0
+      ph: 'in', s: s, s0: s, lat0: c.lat || 0, box: boxOf(c, S), t: 0, comp: c.pitComp || Pit.suggest(c, S),
+      fixFW: Math.max(dmg.fwL || 0, dmg.fwR || 0) > 0.2, fixRW: (dmg.rw || 0) > 0.35, stopT: 0, free: !!free
     };
     c.pitReq = false; c.inPit = true; c.drsOpen = false; c.drsAllowed = false;
-    S.events.push({ type: 'pitin', car: c });
+    S.events.push({ type: 'pitin', car: c, free: !!free });
+  }
+
+  // Zjazd bez zgłoszenia: gracz sam skręcił w drogę alei przed odbojnicą muru. Mechanicy nie czekają
+  // z oponami, więc postój trwa dłużej (FREE_EXTRA).
+  Pit.checkFree = function (c, S) {
+    var T = S.T, P = T.pit;
+    if (!P || P.noseIn === undefined || c.pit || c.pitReq || c.finished || c.retired || c.retiring || S.mode !== 'race' || S.state === 'lights') return false;
+    var N = T.N, d = wrapI(c.idx - P.noseIn, N);
+    if (!(d >= N - 8 || d <= 2)) return false;           // 16 m przed odbojnicą do 4 m za nią
+    if (!((c.lat || 0) > T.pitA[P.noseIn] - 1.4)) return false; // po stronie drogi alei
+    enter(c, S, wrapI(c.idx - P.entry, N), true);
+    return true;
   };
+  var FREE_EXTRA = 7;
 
   // Położenie na alei: indeks (ułamkowy) i odsunięcie od osi toru
   function at(T, fi, lat, out) {
@@ -86,11 +103,24 @@
     var T = S.T, P = T.pit, N = T.N, pt = c.pit, ds = T.ds;
     var sFrom = wrapI(P.from - P.entry, N), sBox = wrapI(pt.box - P.entry, N), sTo = wrapI(P.to - P.entry, N), sExit = wrapI(P.exit - P.entry, N);
     var appr = 26 / ds, join = Math.min(T.hw - 2.4, Math.max(0, (T.line && T.line.o) ? T.line.o[P.exit] : 0));
-    if (s < sFrom) return pt.lat0 + (P.lane - pt.lat0) * sstep(s / sFrom);
+    if (s < sFrom) {
+      // z miejsca zjazdu na środek drogi alei, potem nią aż do pasa przy garażach
+      var s0 = pt.s0 || 0, k = sstep((s - s0) / (pt.free ? 8 : Math.max(4, (sFrom - s0) * 0.42)));
+      return pt.lat0 + (Math.max(pt.lat0, road(T, P.entry + s)) - pt.lat0) * k;
+    }
     if (pt.ph === 'in' && s > sBox - appr) return P.lane + (P.box - P.lane) * sstep((s - (sBox - appr)) / appr);
     if (pt.ph !== 'in' && s < sBox + appr) return P.box + (P.lane - P.box) * sstep((s - sBox) / appr);
     if (s <= sTo) return P.lane;
-    return P.lane + (join - P.lane) * sstep((s - sTo) / (sExit - sTo));
+    // drogą wyjazdu, a na jej końcu na linię jazdy
+    var u = (s - sTo) / (sExit - sTo), kj = sstep((u - 0.62) / 0.38);
+    return road(T, P.entry + s) * (1 - kj) + join * kj;
+  }
+  // środek drogi alei w punkcie fi (ułamkowy indeks toru)
+  function road(T, fi) {
+    var N = T.N, i = wrapI(Math.floor(fi), N), j = wrapI(i + 1, N), f = fi - Math.floor(fi);
+    if (!T.pitA) return T.pit.lane;
+    var a = T.pitA[i] + (T.pitA[j] - T.pitA[i]) * f, b = T.pitB[i] + (T.pitB[j] - T.pitB[i]) * f;
+    return Math.min(T.pit.lane, (a + b) / 2);
   }
 
   // Krok bolidu w alei (zamiast fizyki); dt w sekundach
@@ -108,7 +138,7 @@
         var toLim = (sLimA * ds) - d, toBox = (sBox * ds) - d;
         vt = toLim > 0 ? Math.min(58, Math.sqrt(lim * lim + 2 * 13 * toLim)) : lim;
         vt = Math.min(vt, Math.sqrt(Math.max(0, 2 * 7 * (toBox - 0.2))));
-        if (toBox < 0.35 && c.v < 1.2) { pt.ph = 'stop'; pt.t = stopTime(pt); pt.stopT = pt.t; c.v = 0; S.events.push({ type: 'pitstop', car: c, t: pt.t, comp: pt.comp }); }
+        if (toBox < 0.35 && c.v < 1.2) { pt.ph = 'stop'; pt.t = stopTime(pt) + (pt.free ? FREE_EXTRA + Math.random() * 2 : 0); pt.stopT = pt.t; c.v = 0; S.events.push({ type: 'pitstop', car: c, t: pt.t, comp: pt.comp, free: pt.free }); }
       } else vt = pt.s < sLimB ? lim : 76;
       if (pt.ph !== 'stop') {
         var v = c.v;
@@ -162,7 +192,7 @@
     if (pt.fixFW) { c.dmg.fwL = 0; c.dmg.fwR = 0; }
     if (pt.fixRW) c.dmg.rw = 0;
     if ((pt.fixFW || pt.fixRW) && PG.dmgTotal) { c.dmgTotal = PG.dmgTotal(c.dmg); c.profDirty = true; }
-    S.events.push({ type: 'pitdone', car: c, t: pt.stopT, comp: pt.comp, fixed: pt.fixFW || pt.fixRW });
+    S.events.push({ type: 'pitdone', car: c, t: pt.stopT, comp: pt.comp, fixed: pt.fixFW || pt.fixRW, free: pt.free });
   }
 
   // Strategia AI (po każdym okrążeniu, po uszkodzeniu, przy wyjeździe samochodu bezpieczeństwa)

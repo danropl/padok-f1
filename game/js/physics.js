@@ -195,7 +195,9 @@
     else if (alat <= hw + 1.6 && (right ? T.kerbR[idx] : T.kerbL[idx])) { surface = 'kerb'; surfGrip = 0.94; }
     else {
       var st = right ? T.surfR[idx] : T.surfL[idx];
-      if (st === 1) { surface = 'gravel'; surfGrip = 0.38; surfDrag = (5 + 0.03 * car.v * car.v) * Math.min(1, Math.abs(car.v) / 8); }
+      if (st === 3) st = (lat >= T.pitA[idx] - 0.3 && lat <= T.pitB[idx] + 0.3) ? 4 : 0; // droga alei albo trawiasty klin
+      if (st === 4) { surface = 'asphalt'; }
+      else if (st === 1) { surface = 'gravel'; surfGrip = 0.38; surfDrag = (5 + 0.03 * car.v * car.v) * Math.min(1, Math.abs(car.v) / 8); }
       else if (st === 2) { surface = 'runoff'; surfGrip = 0.88; surfDrag = 0.4; }
       else { surface = 'grass'; surfGrip = 0.5; surfDrag = (2 + 0.012 * car.v * car.v) * Math.min(1, Math.abs(car.v) / 8); }
     }

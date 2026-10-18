@@ -43,7 +43,7 @@ Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod
 | `Esc` | pauza |
 | `M` | dźwięk |
 
-Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕` DRS, `△` kamera, `□` patrz do tyłu, `○` powrót na tor, `Options` pauza. Na telefonie działa sterowanie dotykowe.
+Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕` DRS, `△` kamera, `□` patrz do tyłu, `○` powrót na tor, `L1` / `Create` (Share) zjazd do boksu, `Options` pauza. Na telefonie działa sterowanie dotykowe.
 
 ### Ręczna skrzynia biegów (opcja)
 
@@ -59,7 +59,8 @@ Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕`
 
 - **Dystans:** od 1 do 53 okrążeń (pełny dystans Grand Prix Monzy). Zużycie opon „Auto" przyspiesza degradację w krótszych wyścigach, by strategia miała znaczenie.
 - **Kwalifikacje Q1 · Q2 · Q3:** po Q1 odpada pięciu najwolniejszych, po Q2 kolejnych pięciu, Q3 ustala pierwszą dziesiątkę. Każdy segment można przejechać albo zasymulować. Do wyboru też jedno okrążenie.
-- **Pit stopy:** `B` (pad: `L1`) zgłasza zjazd, `1`–`4` (pad: krzyżak ▲▼) wybiera opony. Przejazd aleją prowadzi gra (80 km/h przy garażach), na stanowisku wymiana opon i naprawa skrzydeł. AI ma własną strategię. Na suchym torze od 10 okrążeń obowiązują dwie różne mieszanki (inaczej +30 s).
+- **Pit stopy:** `B` (pad: `L1` albo `Create`) zgłasza zjazd, `1`–`4` (pad: krzyżak ▲▼) wybiera opony. Przejazd aleją prowadzi gra (80 km/h przy garażach), na stanowisku wymiana opon i naprawa skrzydeł. AI ma własną strategię. Na suchym torze od 10 okrążeń obowiązują dwie różne mieszanki (inaczej +30 s).
+- **Zjazd bez zgłoszenia:** możesz też po prostu skręcić w drogę zjazdu za Parabolicą, zanim zacznie się mur alei. Mechanicy nie czekają wtedy z oponami, więc postój trwa o ok. 7–9 s dłużej.
 - **Samochód bezpieczeństwa i VSC:** po wypadkach, awariach AI i przy odłamkach. Pod SC kolejka bez wyprzedzania i restart na linii mety, pod VSC limit prędkości. DRS wraca dwa okrążenia po restarcie. Częstość awarii: wyłączone / rzadko / często.
 
 ## Multiplayer

@@ -984,8 +984,34 @@
     }
     function nearI(x, z, rc) { try { return PG.nearestGlobal ? PG.nearestGlobal(T, x, z, rc || 4) : -1; } catch (e) { return -1; } }
     function inMain(i) { return T.mainFrom !== undefined && T.mainTo !== undefined && inRun(i, T.mainFrom, T.mainTo); }
-    function barH(s, i) { return s > 0 && inMain(i) ? 1.25 : 1.05; }  // po prawej na prostej startowej: mur alei serwisowej
-    function barT(s, i) { return s > 0 && inMain(i) ? 1.2 : 0.5; }
+    // mur alei serwisowej po prawej: od odbojnicy na zjeździe do odbojnicy na wyjeździe (track.js: T.pitWall)
+    function inPitWall(i) { return !!T.pitWall && inRun(i, T.pitWall.from, T.pitWall.to); }
+    function inPitZone(i) { return !!T.pitA && T.pitA[i] > 0; } // droga alei (zjazd, aleja, wyjazd)
+    function barH(s, i) { return s > 0 && (inMain(i) || inPitWall(i)) ? 1.25 : 1.05; }
+    function barT(s, i) { return s > 0 && (inMain(i) || inPitWall(i)) ? 1.2 : 0.5; }
+    // przerwa w barierze: skok odległości na odbojnicy muru alei (bariera nie przecina drogi alei)
+    // odbojnice na końcach muru alei (żółte z czarnymi pasami) i zakończenie bariery za drogą zjazdu/wyjazdu
+    function pitNoses() {
+      var W = T.pitWall; if (!W || !T.pitA) return;
+      var YB = lin(0xf2c200), BK = lin(0x16171a);
+      [[W.from, -1], [W.to, 1]].forEach(function (e) {
+        var i = e[0], dir = e[1], face = T.barR[i], tk = barT(1, i), lat = face + tk / 2, L = 4.2;
+        var ry = -Math.atan2(T.ty[i], T.tx[i]), ax = T.tx[i] * dir, az = T.ty[i] * dir;
+        var cx = T.x[i] + T.nx[i] * lat + ax * (L / 2 - 0.2), cz = T.y[i] + T.ny[i] * lat + az * (L / 2 - 0.2);
+        box('paintV', cx, 0.55, cz, ry, L, 1.1, tk + 0.3, YB);
+        for (var b = 0; b < 3; b++) {
+          var o = (b - 1) * 1.15;
+          box('paintV', cx + ax * o, 0.55, cz + az * o, ry, 0.32, 1.12, tk + 0.34, BK);
+        }
+        fsPoly([[cx - 2.4, cz - 2.4], [cx + 2.4, cz - 2.4], [cx + 2.4, cz + 2.4], [cx - 2.4, cz + 2.4]], 0, 1.1);
+      });
+      // bariera za drogą: tępe zakończenie przy odbojnicy
+      for (var k = 0; k < N; k++) if (barGap(1, k)) {
+        var far = T.barR[k] > T.barR[(k + 1) % N] ? k : (k + 1) % N, d = T.barR[far] + 0.25;
+        box('concrete', T.x[far] + T.nx[far] * d, 0.5, T.y[far] + T.ny[far] * d, -Math.atan2(T.ty[far], T.tx[far]), 0.6, 1.1, 0.6, lin(0xc9c7c0));
+      }
+    }
+    function barGap(s, i) { return s > 0 && inPitZone(i) && Math.abs(T.barR[(i + 1) % N] - T.barR[i]) > 2.5; }
     // bezpieczne przesunięcie po wewnętrznej stronie łuku (bez zawijania pasów)
     function maxIn(i, s) {
       var k = 0;
@@ -1154,10 +1180,17 @@
     // ---------- bariery, opony, siatki ----------
     safe('bariery', function () {
       [[-1, T.barL], [1, T.barR]].forEach(function (sd) {
-        var s = sd[0], bar = sd[1], shp = [], aop = [];
+        var s = sd[0], bar = sd[1], shp = [], aop = [], gaps = 0, g0 = 0;
+        for (var gi = 0; gi < N; gi++) if (barGap(s, gi)) { g0 = gi + 1; break; } // cienie od początku odcinka
         // front z reklamami (panele po 8 m)
-        for (var i = 0; i < N; i++) {
-          var i1 = (i + 1) % N, d0 = s * bar[i], d1 = s * bar[i1];
+        for (var ii = 0; ii < N; ii++) {
+          var i = (g0 + ii) % N, i1 = (i + 1) % N, d0 = s * bar[i], d1 = s * bar[i1];
+          if (barGap(s, i)) { // koniec odcinka bariery: cienie dotąd, dalej nowy odcinek
+            var hg = barH(s, i) * 0.55 * cotE;
+            gaps++; shp.push([T.x[i] + T.nx[i] * s * (bar[i] + 0.25) + shDx * hg, T.y[i] + T.ny[i] * s * (bar[i] + 0.25) + shDz * hg]); aop.push([T.x[i] + T.nx[i] * d0, T.y[i] + T.ny[i] * d0]);
+            fsStroke(shp, 1.05 * cotE + 0.5, 112, false); fsStroke(aop, 2.4, 0.32, true); shp = []; aop = [];
+            continue;
+          }
           var x0 = T.x[i] + T.nx[i] * d0, z0 = T.y[i] + T.ny[i] * d0, x1 = T.x[i1] + T.nx[i1] * d1, z1 = T.y[i1] + T.ny[i1] * d1;
           var h0 = barH(s, i), h1 = barH(s, i1), row = (hash2(Math.floor(i / 4), s + 5) * 8) | 0, j = i % 4;
           var u0 = j / 4, u1 = (j + 1) / 4;
@@ -1173,18 +1206,19 @@
           shp.push([T.x[i] + T.nx[i] * off + shDx * ho, T.y[i] + T.ny[i] * off + shDz * ho]);
           aop.push([x0, z0]);
         }
-        shp.push(shp[0]); aop.push(aop[0]);
+        if (!gaps) { shp.push(shp[0]); aop.push(aop[0]); }
         fsStroke(shp, 1.05 * cotE + 0.5, 112, false);
         fsStroke(aop, 2.4, 0.32, true);
         // korona i tył muru
-        strip('concrete', 0, N, 4, function (i, si, j, o) {
+        runs(N, function (i) { return !barGap(s, i); }).forEach(function (r) { strip('concrete', r[0], r[1], 4, function (i, si, j, o) {
           var d = bar[i], h = barH(s, i), t = barT(s, i);
           o.r = o.g = o.b = 0.86; o.v = si * ds / 4;
           if (j === 0) { o.lat = s * d; o.y = h; o.u = 0; }
           else if (j === 1) { o.lat = s * (d + t); o.y = h; o.u = 0.12; }
           else { o.lat = s * (d + t); o.y = j === 2 ? h : -0.06; o.nx = s * T.nx[i]; o.ny = 0; o.nz = s * T.ny[i]; o.u = j === 2 ? 0.12 : 0.12 + h / 4; }
-        });
+        }); });
       });
+      pitNoses();
     });
     safe('opony', function () {
       [[-1, T.barL, T.surfL], [1, T.barR, T.surfR]].forEach(function (sd, sIdx) {
@@ -1203,7 +1237,7 @@
     safe('siatki', function () {
       [[-1, T.barL, markL], [1, T.barR, markR]].forEach(function (sd) {
         var s = sd[0], bar = sd[1], mk = sd[2];
-        runs(N, function (i) { return !!mk[i]; }).forEach(function (r) {
+        runs(N, function (i) { return !!mk[i] && !barGap(s, i); }).forEach(function (r) {
           strip('fence', r[0], r[1], 2, function (i, si, j, o) {
             var h = barH(s, i);
             o.lat = s * (bar[i] + 0.15); o.y = j ? h + 3.4 : h - 0.05;
@@ -1497,7 +1531,7 @@
       var WB = lin(0xf0f0ee), OR = lin(0xf26b1d), GL = lin(0x23d160), step = mS(300), cnt = 0;
       for (var i = mS(150); i < N; i += step, cnt++) {
         var s = cnt % 2 ? 1 : -1;
-        if (inMain(i) || (s < 0 ? markL : markR)[i]) { s = -s; if (inMain(i) || (s < 0 ? markL : markR)[i]) continue; }
+        if (inMain(i) || (s < 0 ? markL : markR)[i] || (s > 0 && inPitZone(i))) { s = -s; if (inMain(i) || (s < 0 ? markL : markR)[i] || (s > 0 && inPitZone(i))) continue; }
         var bar = s < 0 ? T.barL[i] : T.barR[i], d = s * (bar + 3.4);
         var x = T.x[i] + T.nx[i] * d, z = T.y[i] + T.ny[i] * d, ry = -Math.atan2(T.ty[i], T.tx[i]);
         if (R2D.bridge && Math.hypot(x - R2D.bridge.x, z - R2D.bridge.y) < 60) continue;
@@ -1517,7 +1551,7 @@
       for (var i = mS(190); i < N; i += step, cnt++) {
         if (Math.abs(KS[i]) > 1 / 300) continue;
         var s = cnt % 2 ? -1 : 1;
-        if (inMain(i) || (s < 0 ? markL : markR)[i]) continue;
+        if (inMain(i) || (s < 0 ? markL : markR)[i] || (s > 0 && inPitZone(i))) continue;
         var bar = s < 0 ? T.barL[i] : T.barR[i], d = s * (bar + 7.5);
         var x = T.x[i] + T.nx[i] * d, z = T.y[i] + T.ny[i] * d;
         if (R2D.bridge && Math.hypot(x - R2D.bridge.x, z - R2D.bridge.y) < 70) continue;
@@ -1731,6 +1765,8 @@
           if (!mkS[i] && !inMain(i)) { var b0 = bar[i] + barT(s, i) + 0.4, b1 = bar[i1] + barT(s, i1) + 0.4; quad(gA, i, i1, s, b0, bar[i] + 8.5, b1, bar[i1] + 8.5); }
         }
       });
+      // bez trawy na drodze alei (zjazd, aleja, wyjazd)
+      if (T.pitA) { gA.fillStyle = '#000'; for (var pz = 0; pz < N; pz++) { var pz1 = (pz + 1) % N; if (T.pitA[pz] > 0 && T.pitA[pz1] > 0) quad(gA, pz, pz1, 1, T.pitA[pz] - 0.3, T.pitB[pz] + 0.6, T.pitA[pz1] - 0.3, T.pitB[pz1] + 0.6); } }
       var dA = gA.getImageData(0, 0, MS, MS).data, dB = gB.getImageData(0, 0, MS, MS).data, md = new Uint8Array(MS * MS * 4);
       for (var k = 0; k < MS * MS; k++) { md[k * 4] = dB[k * 4]; md[k * 4 + 1] = dA[k * 4]; md[k * 4 + 3] = 255; }
       cA.width = cA.height = cB.width = cB.height = 1;

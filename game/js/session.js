@@ -158,6 +158,7 @@
         var prevIdx = c.idx;
         PG.stepCar(c, h, T, S.env);
         if (c.pitReq && PG.Pit) PG.Pit.check(c, S, prevIdx);
+        else if (c.human && PG.Pit && PG.Pit.checkFree) PG.Pit.checkFree(c, S); // sam skręcił do alei
         if (running && !c.isPlayer && !c.retiring && S.time > 6) {
           if (c.v < 3) { c.stuck = (c.stuck || 0) + h; if (c.stuck > 3) PG.resetCar(c, T); } else c.stuck = 0;
         }

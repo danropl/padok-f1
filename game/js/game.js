@@ -382,7 +382,7 @@
     var S = G.S, p = S && S.player;
     if (!p || S.mode !== 'race' || !PG.TYRES[k]) return;
     p.pitComp = k;
-    G.msg('', 'Opony na pit stop: ' + PG.TYRES[k].name + (p.pitReq ? '' : ' · B' + (padConnected() ? (G.manualGears() ? ' / Create' : ' / L1') : '') + ' zgłasza zjazd'), '', 1.8);
+    G.msg('', 'Opony na pit stop: ' + PG.TYRES[k].name + (p.pitReq ? '' : ' · B' + (padConnected() ? (G.manualGears() ? ' / Create' : ' / L1 / Create') : '') + ' zgłasza zjazd'), '', 1.8);
   };
   G.cycleComp = function (dir) {
     var S = G.S, p = S && S.player;
@@ -598,9 +598,11 @@
         case 'fastest': if (e.car === p) G.msg('NAJSZYBSZE OKRĄŻENIE', PG.fmtTime(e.t), 'purple', 2.5); break;
         case 'finish': if (e.car === p) { G.stopHaptics(); G.msg('META! P' + p.pos, p.penalty ? 'z karą +' + p.penalty + ' s' : '', '', 4); A.beep(660, 0.2); A.beep(990, 0.4); } break;
         case 'qualidone': G.stopHaptics(); G.msg('CZAS OKRĄŻENIA', PG.fmtTime(e.t), 'purple', 4); break;
-        case 'pitin': if (e.car === p) G.msg('ALEJA SERWISOWA', 'Ogranicznik 80 km/h przy garażach', '', 2.2); break;
+        case 'pitin':
+          if (e.car === p) G.msg('ALEJA SERWISOWA', e.free ? 'Zjazd bez zgłoszenia: mechanicy nie są gotowi, postój potrwa dłużej' : 'Ogranicznik 80 km/h przy garażach', '', e.free ? 3.2 : 2.2);
+          break;
         case 'pitdone':
-          if (e.car === p) G.msg('PIT STOP ' + e.t.toFixed(1).replace('.', ',') + ' s', 'Opony: ' + (PG.TYRES[e.comp] || PG.TYRES.M).name + (e.fixed ? ' · nowe skrzydło' : ''), '', 2.6);
+          if (e.car === p) G.msg('PIT STOP ' + e.t.toFixed(1).replace('.', ',') + ' s', 'Opony: ' + (PG.TYRES[e.comp] || PG.TYRES.M).name + (e.fixed ? ' · nowe skrzydło' : '') + (e.free ? ' · bez zgłoszenia' : ''), '', 2.6);
           break;
         case 'pitout': if (e.car === p) G.msg('', 'Wyjazd z alei — wracasz do wyścigu', '', 1.6); break;
         case 'rc': G.msg(e.text, e.sub, e.mode === 'green' ? 'green' : 'rc', e.mode === 'green' ? 2.5 : 3.5); break;

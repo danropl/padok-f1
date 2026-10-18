@@ -117,9 +117,7 @@
       garage0: gar0, limFrom: wrapI(gar0 - Math.round(40 / ds), N), limTo: wrapI(gar0 + Math.round(370 / ds), N),
       lane: T.hw + 6.6, box: T.hw + 10.6, limit: 80 / 3.6
     };
-    // przejazd przez linię muru na zjeździe i wyjeździe: asfalt i bariera dalej od toru
-    for (var pe = T.pit.entry; pe !== pitFrom; pe = wrapI(pe + 1, N)) { T.barR[pe] = Math.max(T.barR[pe], T.hw + 14); T.surfR[pe] = 2; }
-    for (var px = pitTo; px !== T.pit.exit; px = wrapI(px + 1, N)) { T.barR[px] = Math.max(T.barR[px], T.hw + 14); T.surfR[px] = 2; }
+    pitRoad(T);
     T.line = racingLine(T);
     buildGrid(T);
     var minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
@@ -187,6 +185,41 @@
         }
       }
     });
+  }
+
+  // Droga zjazdu i wyjazdu z alei: odchodzi od prawej krawędzi toru (pitA/pitB — wewnętrzna i zewnętrzna krawędź,
+  // odsunięcie od osi toru), oddzielona trawiastym klinem i murem alei zakończonym odbojnicą (noseIn / noseOut).
+  // Bariera prawa przed odbojnicą biegnie za drogą, od odbojnicy do odbojnicy to mur alei (jak na prostej startowej).
+  // surfR = 3: droga alei (asfalt między pitA i pitB, trawa poza nią).
+  function pitRoad(T) {
+    var P = T.pit, N = T.N, hw = T.hw, ds = T.ds;
+    var A = T.pitA = new Float32Array(N), B = T.pitB = new Float32Array(N);
+    var lane0 = hw + 4.2, lane1 = hw + 13, nIn = wrapI(P.from - P.entry, N), nOut = wrapI(P.exit - P.to, N);
+    function sst(t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); }
+    // t: 0 przy torze, 1 w alei
+    function edgeA(t) { return hw + 0.15 + (lane0 - hw - 0.15) * sst(t); }
+    function edgeB(t) { return hw + 0.45 + (lane1 - hw - 0.45) * sst(t / 0.62); }
+    function tAt(i) {
+      var a = wrapI(i - P.entry, N); if (a <= nIn) return a / nIn;
+      var b = wrapI(P.exit - i, N); if (b <= nOut) return b / nOut;
+      return 1;
+    }
+    var span = wrapI(P.exit - P.entry, N), i, k, t;
+    for (k = 0; k <= span; k++) { i = wrapI(P.entry + k, N); t = tAt(i); A[i] = edgeA(t); B[i] = edgeB(t); }
+    // odbojnica: tam, gdzie klin między torem a drogą mieści mur (lico muru 1,2 m przed drogą, ≥ 1 m od krawędzi toru)
+    var noseIn = P.entry, noseOut = P.exit;
+    for (k = 0; k <= nIn; k++) { i = wrapI(P.entry + k, N); if (A[i] - 1.2 >= hw + 1) { noseIn = i; break; } }
+    for (k = 0; k <= nOut; k++) { i = wrapI(P.exit - k, N); if (A[i] - 1.2 >= hw + 1) { noseOut = i; break; } }
+    P.noseIn = noseIn; P.noseOut = noseOut;
+    var wall = wrapI(noseOut - noseIn, N);
+    for (k = 0; k <= span; k++) {
+      i = wrapI(P.entry + k, N);
+      var inWall = wrapI(i - noseIn, N) <= wall;
+      if (inWall) T.barR[i] = Math.min(T.barR[i], A[i] - 1.2);  // mur alei (lico od strony toru)
+      else T.barR[i] = Math.max(T.barR[i], B[i] + 6);          // przed odbojnicą: bariera za drogą
+      if (wrapI(i - P.from, N) > wrapI(P.to - P.from, N)) { T.surfR[i] = 3; T.kerbR[i] = 0; }
+    }
+    T.pitWall = { from: noseIn, to: noseOut };
   }
 
   function gridSlots(T, n) {

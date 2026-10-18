@@ -428,7 +428,7 @@
       h('div', {}, kb('C'), ' kamera   ', kb('V'), ' patrz do tyłu   ', kb('B'), ' zjazd do boksu   ', kb('1'), '–', kb('4'), ' opony'),
       h('div', {}, kb('X'), ' / ', kb('Z'), ' bieg w górę / w dół (ręczna skrzynia)'),
       h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
-      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('L1'), ' boks   ', kb('Options'), ' pauza'),
+      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('L1'), ' / ', kb('Create'), ' boks   ', kb('Options'), ' pauza'),
       h('div', {}, 'Ręczna skrzynia na padzie: ', kb('R1'), ' / ', kb('L1'), ' biegi   ', kb('✕'), ' DRS   ', kb('Create'), ' / ', kb('L3'), ' boks'),
       h('div', {}, 'Na telefonie działa sterowanie dotykowe.'))));
 
@@ -669,7 +669,7 @@
     side.appendChild(seg(tyreOpts, comp, function (v) { comp = v; }));
     var rule = ctx.weather !== 'rain' && ctx.laps >= 10;
     side.appendChild(h('p', { class: 'muted', style: 'font-size:14px', text: 'Miękkie trzymają najlepiej, ale szybko się zużywają. Twarde wytrzymają długo. W deszczu slicki tracą przyczepność.' +
-      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1, przy ręcznej skrzyni Create), opony 1–4 (pad: krzyżak ▲▼).' }));
+      (rule ? ' Na suchym torze trzeba w wyścigu użyć dwóch różnych mieszanek (inaczej kara +30 s).' : '') + ' Zjazd do boksu: B (pad: L1 albo Create, przy ręcznej skrzyni Create), opony 1–4 (pad: krzyżak ▲▼). Bez zgłoszenia też możesz skręcić w zjazd przed murem alei, ale postój potrwa dłużej.' }));
     function go(spectate) {
       root.innerHTML = '';
       var entries = times.map(function (x) {

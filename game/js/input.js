@@ -15,7 +15,7 @@
   // Akcje gry → przyciski
   var ACT = {
     drs: [B.r1, B.cross], camera: [B.triangle], look: [B.square], reset: [B.circle], pause: [B.options],
-    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right], box: [B.l1], compUp: [B.up], compDown: [B.down],
+    confirm: [B.cross], back: [B.circle], dleft: [B.left], dright: [B.right], box: [B.l1, B.create], compUp: [B.up], compDown: [B.down],
     gearUp: [], gearDown: []
   };
 
@@ -127,10 +127,11 @@
   };
 
   // Akcja wciśnięta (trzymana)
-  // Ręczna skrzynia: R1 / L1 to łopatki zmiany biegów, DRS zostaje na ✕, zjazd do boksu na Create albo L3
+  // Ręczna skrzynia: R1 / L1 to łopatki zmiany biegów, DRS zostaje na ✕, zjazd do boksu na Create albo L3.
+  // Create (Share na DualSense, View/Back na padzie Xbox) zgłasza zjazd w obu trybach.
   Pad.setManualGears = function (on) {
     ACT.drs = on ? [B.cross] : [B.r1, B.cross];
-    ACT.box = on ? [B.create, B.l3] : [B.l1];
+    ACT.box = on ? [B.create, B.l3] : [B.l1, B.create];
     ACT.gearUp = on ? [B.r1] : [];
     ACT.gearDown = on ? [B.l1] : [];
     Pad.manualGears = !!on;
