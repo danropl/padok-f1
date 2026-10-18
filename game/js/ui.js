@@ -354,7 +354,7 @@
     // opisy z liniami
     var row = function (r, k, side) {
       var y = side === 'l' ? 26 + k * 60 : 22 + k * 46, t = P[r[0]], x0 = side === 'l' ? 196 : 624, x1 = side === 'l' ? 222 : 598;
-      out.push('<polyline class="ld" points="' + x0 + ',' + (y - 5) + ' ' + x1 + ',' + (y - 5) + ' ' + t[0] + ',' + t[1] + '"/><circle class="ldot" cx="' + t[0] + '" cy="' + t[1] + '" r="3"/>');
+      out.push('<polyline class="ld" points="' + x0 + ',' + (y - 5) + ' ' + x1 + ',' + (y - 5) + ' ' + t[0] + ',' + t[1] + '"/>' + (/^(tri|cir|cro|squ)$/.test(r[0]) ? '' : '<circle class="ldot" cx="' + t[0] + '" cy="' + t[1] + '" r="3"/>'));
       out.push('<text class="lbl ' + side + '" x="' + (side === 'l' ? 188 : 632) + '" y="' + y + '"><tspan class="btn">' + r[1] + '</tspan><tspan dx="8">' + r[2].replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</tspan></text>');
     };
     m.left.forEach(function (r, k) { row(r, k, 'l'); });
