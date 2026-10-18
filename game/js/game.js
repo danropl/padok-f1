@@ -25,7 +25,7 @@
     delete st.graphics; delete st.camRotate; // ustawienia usuniętego widoku 2D
     st.autoDrs = !!st.autoDrs; st.abs = !!st.abs; st.tc = !!st.tc; st.haptics = !!st.haptics; st.post = !!st.post;
     if (st.gearbox !== 'manual') st.gearbox = 'auto';
-    if (st.engineSound !== 'simple') st.engineSound = 'v10';
+    if (st.engineSound !== 'simple' && st.engineSound !== 'pack') st.engineSound = 'v10';
   };
   G.assistOpts = function () {
     var st = PG.Store.data.settings;

@@ -1,3 +1,9 @@
 node_modules
 dist
 .env.local
+
+# Nagrania z paczek dźwięków do F1 25 (EA/Codemasters) — tylko lokalnie, gracz wczytuje je w grze
+*.bdl
+*.BDL
+*Engine_Sound_Pack*
+*Engine Sounds*/

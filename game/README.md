@@ -86,8 +86,22 @@ Silniki brzmią jak V10 z F1 lat 2000–2005. Dźwięk jest syntezowany na bież
 - **Model:** impulsy ciśnienia z dwóch rzędów cylindrów przez osobne rury wydechowe, dolot z rezonansem airboksu, rozrzut spalania między zapłonami. Każdy bolid ma trochę inny charakter brzmienia.
 - **Zachowanie:** strzały z wydechu po odpuszczeniu gazu, krótka przerwa zapłonu przy zmianie biegu w górę, przegazówka przy redukcji, ogranicznik obrotów, ogranicznik prędkości w alei serwisowej, wypadanie zapłonów przy uszkodzonym silniku. Na polach startowych przy zapalonych światłach rywale trzymają obroty.
 - **Słuchacz w kamerze:** z kokpitu i T-kamery słychać dolot i silnik z bliska, z zewnątrz głównie wydech. Słychać też do 4 najbliższych rywali, z odległością, kierunkiem i efektem Dopplera (najlepiej w kamerze telewizyjnej).
-- **Ustawienia → Dźwięk → Silniki:** V10 albo Prosty (dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia).
+- **Ustawienia → Dźwięk → Silniki:** V10, Paczka F1 25 (nagrania, niżej) albo Prosty (dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia).
 - Synteza działa w osobnym wątku audio (AudioWorklet), gdy gra jest otwarta z `localhost` albo `https`. Z innego adresu ten sam dźwięk liczy się w wątku głównym.
+
+## Dźwięki silników z paczki do F1 25 (opcjonalnie)
+
+Gra potrafi grać prawdziwe nagrania silników z paczki dźwięków do gry F1 25 (pliki `.bdl`, np. `F1_25_Engine_Sound_Pack.zip`). **Nagrania należą do EA/Codemasters i nie ma ich w repozytorium** — każdy gracz wczytuje paczkę ze swojego dysku, a wybrany zestaw zostaje tylko w jego przeglądarce (IndexedDB). Nic nie jest nigdzie wysyłane, a `.gitignore` blokuje dodanie plików `.bdl` i paczki do gita.
+
+1. **Ustawienia → Dźwięk → Wczytaj paczkę (ZIP lub .bdl)…** i wskaż plik ZIP (albo **Rozpakowany folder…**, albo same pliki `.bdl`).
+2. Gra pokaże zestawy z paczki (F1 2019, F1 2020, F1 22, F1 23, F1 24, F1 25 dla bolidów 2026, V8, V10, V12). Domyślnie wybiera **F1 24 Engine Sounds** — kliknij **Zainstaluj zestaw**. Zmiana zestawu: wybierz inny i zainstaluj go ponownie (bez ponownego wskazywania pliku, dopóki strona jest otwarta).
+3. Silniki: **Paczka F1 25** włącza się sama. Po ponownym uruchomieniu gry paczka wczytuje się z przeglądarki (ok. 16–20 MB na zestaw). **Usuń paczkę** kasuje nagrania z przeglądarki.
+
+Każdy bolid brzmi jak silnik swojego producenta: Ferro → Ferrari, Stella → Mercedes, Honta → Honda, Renova → Renault (pliki `*_2025.bdl`; w zestawie dla bolidów 2026 Honda i Renault z najbliższych odpowiedników). Tak jak przy V10 słychać rywali w pobliżu, odległość, kierunek, efekt Dopplera, przerwę zapłonu przy zmianie biegu, ogranicznik obrotów i ogranicznik w alei. Kto nie ma paczki (np. drugi gracz w multiplayerze), słyszy V10.
+
+Jak to działa: plik `.bdl` to pakiet nagrań z silnika gry (EGO). Każde nagranie to przemiatanie obrotów — z gazem (od jałowych do ogranicznika) i bez gazu (hamowanie silnikiem) z dwóch mikrofonów (przy wydechu i bliżej silnika) — z dokładnie oznaczonymi początkami cykli silnika (2 obroty wału). Gra odtwarza je syntezą ziarnistą: ziarna długości dwóch cykli wycięte wokół znaczników, co jeden cykl następne, z wysokością dopasowaną do obrotów. Kursor idzie po nagraniu cykl po cyklu i wahadłowo wokół miejsca o właściwych obrotach, więc dźwięk żyje i nie trzeszczy. Obroty bolidu (4500–19 000) są przeliczane na zakres nagrania (jałowe–ogranicznik), gaz płynnie przenika między nagraniem z gazem i bez gazu, a w kokpicie słychać głównie mikrofon przy silniku.
+
+Rozpakowanie ZIP w przeglądarce wymaga Chrome/Edge 103+, Safari 16.4+ albo Firefox 113+; w starszych rozpakuj paczkę i wskaż folder.
 
 ## Grafika 3D
 
@@ -111,7 +125,8 @@ Drzewa z kart liści (trzy gatunki, kołysanie na wietrze), trawa 3D na poboczac
 | `js/car3d.js`, `js/world3d-lite.js`, `js/view3d.js`, `js/post3d.js` | widok 3D: bolid, tor, drzewa, trawa, kamery, postprocessing |
 | `js/cockpit3d.js` | wnętrze kokpitu (kierownica, wyświetlacz, dłonie) |
 | `js/audio.js` | dźwięk: silniki (słuchacz w kamerze, rywale, odległość, Doppler) i efekty (Web Audio) |
-| `js/v10.js` | synteza dźwięku silnika V10 (AudioWorklet, zapasowo w wątku głównym) |
+| `js/v10.js` | synteza dźwięku silnika V10 i odtwarzanie nagrań z paczki F1 25 (AudioWorklet, zapasowo w wątku głównym) |
+| `js/enginepack.js` | wczytywanie paczki dźwięków F1 25 z dysku gracza (ZIP, `.bdl`), odczyt formatu, zapis w przeglądarce |
 | `js/input.js` | pad, wibracje, adaptacyjne spusty DualSense (WebHID) |
 | `js/game.js` | pętla gry |
 | `serve.py`, `start.command`, `start.bat` | lokalny serwer bez pamięci podręcznej i uruchamianie z aktualizacją |

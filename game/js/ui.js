@@ -120,6 +120,8 @@
       bar1, h('p', { class: 'muted', text: 'Wczytywanie toru i bolidów…' })));
     G.init(function (p) { bar1.firstChild.style.width = Math.round(p * 100) + '%'; }, function () { if (G.noWebGL) UI.noWebGL(); else UI.menu(); });
     document.addEventListener('pointerdown', function () { PG.Audio.init(); }, { once: true });
+    // paczka dźwięków silników zapisana w tej przeglądarce (jeśli gracz ją wczytał)
+    if (PG.EnginePack) PG.EnginePack.load();
   };
 
   // Gra działa tylko w 3D: bez WebGL zamiast menu jest wyjaśnienie
@@ -193,6 +195,86 @@
   function lineSeg(onPick) {
     var st = Store.data.settings;
     return seg(LINE_OPTS, G.lineMode ? G.lineMode() : (st.racingLine || 'full'), function (v) { st.racingLine = v; st.brakeHint = v !== 'off'; Store.save(); if (onPick) onPick(v); });
+  }
+  // Dźwięk silników: synteza V10, nagrania z paczki F1 25 (wczytanej z dysku gracza) albo dawny prosty dźwięk
+  var ENG_TXT = {
+    v10: 'V10: dźwięk silników z F1 lat 2000–2005 (do 19 000 obr./min) liczony na bieżąco. Słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera.',
+    pack: 'Paczka F1 25: nagrania silników z paczki do gry F1 25 wczytanej z Twojego dysku. Każdy bolid brzmi jak silnik swojego producenta, także rywale w pobliżu. Bez wczytanej paczki gra V10.',
+    simple: 'Prosty: dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia.'
+  };
+  function enginePanel(st) {
+    var EP = PG.EnginePack, box = h('div', { class: 'col', style: 'gap:8px' }), segBox = h('div'), engNote = note(''), packBox = h('div', { class: 'col', style: 'gap:6px' });
+    var chosen = EP && EP.sets ? EP.defaultSet(EP.sets) : null, msg = '';
+    var mode = function () { return st.engineSound === 'simple' ? 'simple' : st.engineSound === 'pack' ? 'pack' : 'v10'; };
+    var fileIn = h('input', { type: 'file', accept: '.zip,.bdl', multiple: true, style: 'display:none', onchange: function () { pick(fileIn.files); fileIn.value = ''; } });
+    var dirIn = h('input', { type: 'file', webkitdirectory: true, style: 'display:none', onchange: function () { pick(dirIn.files); dirIn.value = ''; } });
+    var drawSeg = function () {
+      segBox.innerHTML = '';
+      segBox.appendChild(seg([['v10', 'V10'], ['pack', 'Paczka F1 25'], ['simple', 'Prosty']], mode(), function (v) {
+        st.engineSound = v; Store.save(); engNote.textContent = ENG_TXT[v];
+        if (v === 'pack' && EP && !EP.ready && !EP.busy) fileIn.click();
+      }));
+      engNote.textContent = ENG_TXT[mode()];
+    };
+    var install = function (set) {
+      msg = ''; draw();
+      EP.install(set).then(function () {
+        st.engineSound = 'pack'; Store.save(); drawSeg();
+        UI.toast('Dźwięki silników: ' + set.name);
+      }, function () { /* błąd pokazuje panel */ }).then(draw);
+    };
+    var pick = function (files) {
+      if (!EP || !files || !files.length) return;
+      EP.error = ''; msg = 'Czytam pliki…'; draw();
+      EP.open(files).then(function (sets) {
+        chosen = EP.defaultSet(sets); msg = '';
+        if (sets.length === 1) install(chosen); else draw();
+      }, function (e) { msg = ''; EP.error = e && e.message ? e.message : String(e); draw(); });
+    };
+    var mb = function (b) { return (b / 1048576).toFixed(1).replace('.', ',') + ' MB'; };
+    var draw = function () {
+      packBox.innerHTML = '';
+      packBox.appendChild(h('h3', { text: 'Paczka dźwięków F1 25', style: 'margin-top:4px' }));
+      if (!EP) { packBox.appendChild(note('Niedostępne w tej wersji gry.')); return; }
+      var inf = EP.info;
+      var status = EP.busy ? 'Instaluję… ' + Math.round(EP.progress * 100) + '%' : msg ? msg
+        : inf ? 'Zainstalowano: ' + inf.set + ' (' + mb(inf.bytes) + (inf.cyl ? ', ' + inf.cyl + ' cyl.' : '') + ', obroty ' + inf.rpm[0] + '–' + inf.rpm[1] + ')' +
+          (inf.unsaved ? '. Przeglądarka nie pozwoliła zapisać nagrań — działają do zamknięcia strony.' : '')
+        : 'Nie wczytano.';
+      packBox.appendChild(h('p', { style: 'margin:0', text: status }));
+      if (EP.error) packBox.appendChild(h('p', { style: 'margin:0;color:var(--red)', text: EP.error }));
+      if (EP.sets && EP.sets.length > 1 && !EP.busy) {
+        if (!chosen || EP.sets.indexOf(chosen) < 0) chosen = EP.defaultSet(EP.sets);
+        var sel = h('select', { id: 'packSet', onchange: function () { chosen = EP.sets[+sel.value]; } });
+        EP.sets.forEach(function (s, i) { sel.appendChild(h('option', { value: i, text: s.name, selected: s === chosen })); });
+        packBox.appendChild(h('label', { class: 'field' }, 'Zestaw z paczki ' + EP.source, sel));
+        packBox.appendChild(h('div', { class: 'row' }, h('button', { type: 'button', class: 'primary', text: 'Zainstaluj zestaw', onclick: function () { install(chosen); } })));
+      }
+      var row = h('div', { class: 'row' },
+        h('button', { type: 'button', text: inf ? 'Wczytaj inną paczkę…' : 'Wczytaj paczkę (ZIP lub .bdl)…', disabled: EP.busy, onclick: function () { fileIn.click(); } }),
+        h('button', { type: 'button', text: 'Rozpakowany folder…', disabled: EP.busy, onclick: function () { dirIn.click(); } }));
+      if (inf && !EP.busy) {
+        var del = h('button', { type: 'button', class: 'danger', text: 'Usuń paczkę' });
+        del.onclick = function () { confirmInline(del, 'Usunąć nagrania z przeglądarki?', function () {
+          EP.remove(); if (st.engineSound === 'pack') { st.engineSound = 'v10'; Store.save(); }
+          drawSeg(); draw();
+        }); };
+        row.appendChild(del);
+      }
+      packBox.appendChild(row);
+      if (inf) {
+        var parts = Object.keys(EP.ENGINE_OF).map(function (e) { var k = EP.ENGINE_OF[e]; return e + ' → ' + EP.LABEL[k] + ' (' + (inf.names[inf.keys[k]] || '?').replace(/\.bdl$/i, '') + ')'; });
+        packBox.appendChild(note('Silniki zespołów: ' + parts.join(', ') + '.'));
+      }
+      packBox.appendChild(note('Nagrania należą do EA/Codemasters i nie są częścią gry. Wskaż paczkę na swoim dysku (np. F1_25_Engine_Sound_Pack.zip) — wybrany zestaw zostaje tylko w tej przeglądarce i nigdzie nie jest wysyłany.'));
+    };
+    drawSeg(); draw();
+    if (EP) { var off = EP.onChange(function () { if (packBox.isConnected) draw(); }); UI.onLeave(off); }
+    box.appendChild(h('div', { class: 'field' }, 'Silniki', segBox));
+    box.appendChild(engNote);
+    box.appendChild(packBox);
+    box.appendChild(fileIn); box.appendChild(dirIn);
+    return box;
   }
   // Sterowanie padem (krótka ściąga)
   function padControls() {
@@ -325,8 +407,7 @@
     dp.appendChild(h('div', { class: 'field' }, 'Dźwięk', seg([[true, 'Włączony'], [false, 'Wyłączony']], st.sound, function (v) { st.sound = v; PG.Audio.setOn(v); Store.save(); })));
     var vol = h('input', { type: 'range', id: 'vol', min: 0, max: 100, value: Math.round(st.vol * 100), oninput: function () { st.vol = vol.value / 100; PG.Audio.setVol(st.vol); Store.save(); } });
     dp.appendChild(h('label', { class: 'field' }, 'Głośność', vol));
-    dp.appendChild(h('div', { class: 'field' }, 'Silniki', seg([['v10', 'V10'], ['simple', 'Prosty']], st.engineSound === 'simple' ? 'simple' : 'v10', function (v) { st.engineSound = v; Store.save(); })));
-    dp.appendChild(note('V10: dźwięk silników z F1 lat 2000–2005 (do 19 000 obr./min), słychać też rywali w pobliżu, z odległością, kierunkiem i efektem Dopplera. Prosty: dawny, lżejszy dźwięk tylko własnego bolidu, na słabsze urządzenia.'));
+    dp.appendChild(enginePanel(st));
     dp.appendChild(h('h3', { text: 'Zapis gry', style: 'margin-top:6px' }));
     var del = h('button', { type: 'button', class: 'danger', text: 'Usuń zapis gry' });
     del.onclick = function () { confirmInline(del, 'Usunąć karierę i kreacje?', function () {

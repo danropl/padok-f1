@@ -1,6 +1,8 @@
 // WORLD GP — dźwięk silnika i efekty (Web Audio, bez plików).
 // Silniki V10: synteza w js/v10.js (AudioWorklet), tu słuchacz w kamerze, wybór słyszanych bolidów,
 // odległość, panorama i efekt Dopplera. Ustawienie „Silniki: Prosty” wraca do dawnego, lżejszego dźwięku.
+// „Silniki: Paczka F1 25” — te same głosy grają nagrania silników z paczki wczytanej przez gracza
+// (js/enginepack.js), każdy bolid nagranie swojego producenta.
 (function (PG) {
   'use strict';
   var A = PG.Audio = { ctx: null, on: true, vol: 0.5, lastCrunch: -9, lastDrs: -9 };
@@ -11,6 +13,7 @@
   // ---------- silniki V10 ----------
   var V10 = A.v10 = {
     ready: false, node: null, eng: null, sp: null, bus: null, buf: null, slots: [], idle: true, tmp: null,
+    banks: null, bankMap: null, bankSent: null, useBank: false,
     lis: { x: 0, y: 0, z: 0, fx: 1, fz: 0, vx: 0, vz: 0, t: 0, ok: false, mode: 'chase' }
   };
   var MAX_DIST = 420; // dalej rywali nie słychać
@@ -31,16 +34,40 @@
       var eng = V10.eng = new lib.Engine(c.sampleRate);
       var sp = V10.sp = c.createScriptProcessor(2048, 0, 2);
       sp.onaudioprocess = function (ev) { var o = ev.outputBuffer; eng.process(o.getChannelData(0), o.getChannelData(1), o.length); };
-      sp.connect(V10.bus); V10.ready = true;
+      sp.connect(V10.bus); V10.ready = true; v10SendBanks();
     };
     // AudioWorklet działa tylko z localhost albo https; inaczej ten sam kod w wątku głównym
     if (c.audioWorklet && window.AudioWorkletNode && window.isSecureContext !== false) {
       c.audioWorklet.addModule('js/v10.js?v=' + (PG.VERSION || '')).then(function () {
         V10.node = new AudioWorkletNode(c, 'pg-v10', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-        V10.node.connect(V10.bus); V10.ready = true;
+        V10.node.connect(V10.bus); V10.ready = true; v10SendBanks();
       }).catch(function (e) { console.warn('Dźwięk V10: AudioWorklet niedostępny, liczony w wątku głównym', e); useSP(); });
     } else useSP();
   }
+
+  // Nagrania silników z paczki: przekazanie do wątku dźwięku (tablice przenoszone, bez kopii w pamięci strony)
+  function v10SendBanks() {
+    if (!V10.ready || V10.bankSent === V10.banks) return;
+    var banks = V10.banks;
+    if (V10.node) {
+      var tr = [];
+      (banks || []).forEach(function (b) {
+        b.mics.forEach(function (m) {
+          [m.on, m.off].forEach(function (L) {
+            ['pcm', 'mk', 'per', 'rpm', 'rf', 'wn', 'lv'].forEach(function (k) { var ab = L[k] && L[k].buffer; if (ab && ab.byteLength && tr.indexOf(ab) < 0) tr.push(ab); });
+          });
+        });
+      });
+      try { V10.node.port.postMessage({ banks: banks }, tr); }
+      catch (e) { console.warn('Paczka dźwięków: nie udało się przekazać nagrań', e); return; }
+    } else if (V10.eng) V10.eng.setBanks(banks);
+    V10.bankSent = banks;
+  }
+  A.setBanks = function (banks, map) {
+    V10.banks = banks && banks.length ? banks : null;
+    V10.bankMap = V10.banks ? map || {} : null;
+    v10SendBanks();
+  };
 
   function v10Post() {
     if (V10.node) V10.node.port.postMessage(V10.buf);
@@ -111,6 +138,10 @@
     b[o + P.LP] = lp; b[o + P.DOP] = dop; b[o + P.ONB] = onb; b[o + P.LIM] = lim ? 1 : 0;
     b[o + P.UP] = sl.up; b[o + P.DOWN] = sl.down; b[o + P.PIT] = pitLim ? 1 : 0; b[o + P.DMG] = dmg;
     b[o + P.SPD] = Math.abs(fin(c.v, 0)); b[o + P.SEED] = (c.id || 0) + 1; b[o + P.RESET] = sl.reset;
+    // nagranie silnika producenta (paczka dźwięków); nieznany producent — pierwszy bank
+    var bi = 0;
+    if (V10.useBank) { var k = V10.bankMap[c.team && c.team.engine]; bi = (k == null ? 0 : k) + 1; }
+    if (P.BANK != null) b[o + P.BANK] = bi;
   }
 
   function v10Off() {
@@ -203,6 +234,7 @@
     var t = A.ctx.currentTime;
     var st = PG.Store && PG.Store.data && PG.Store.data.settings;
     var useV10 = V10.ready && !(st && st.engineSound === 'simple');
+    V10.useBank = !!(st && st.engineSound === 'pack' && V10.banks && V10.bankSent === V10.banks);
     if (!active || !car) {
       A.eng.gain.setTargetAtTime(0, t, 0.08); A.skidG.gain.setTargetAtTime(0, t, 0.05); A.crowdG.gain.setTargetAtTime(0, t, 0.2);
       if (A.sqG) { A.sqG.gain.setTargetAtTime(0, t, 0.05); A.sqOG.gain.setTargetAtTime(0, t, 0.05); }
