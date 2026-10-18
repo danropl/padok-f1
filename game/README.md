@@ -45,7 +45,7 @@ Zapis gry (kariera, kreator, ustawienia) trzyma `localStorage` przeglądarki pod
 
 Pad (DualSense i inne): lewa gałka skręt, `R2` gaz, `L2` hamulec, `R1` / `✕` DRS, `△` kamera, `□` patrz do tyłu, `○` powrót na tor, `L1` / `Create` (Share) zjazd do boksu, `Options` pauza. Na telefonie działa sterowanie dotykowe.
 
-W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który leży wizualnie w danym kierunku (także w siatce kart zespołów i między kolumnami ustawień); `Enter` / `✕` wybiera, `○` wraca.
+W menu strzałki na klawiaturze i krzyżak pada przechodzą do przycisku, który leży wizualnie w danym kierunku (także w siatce kart zespołów i między kolumnami ustawień); `Enter` / `✕` wybiera, `Esc` / `○` wraca. Na dole ekranu pasek podpowiada te przyciski dla klawiatury albo pada. Ustawienia są podzielone na sekcje z boczną nawigacją (Grafika, Jazda, Kontroler, Dźwięk, Sterowanie), a w szybkim wyścigu panel ustawień z przyciskiem startu zostaje widoczny przy przewijaniu listy zespołów.
 
 ### Ręczna skrzynia biegów (opcja)
 
