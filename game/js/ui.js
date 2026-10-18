@@ -19,8 +19,16 @@
       else el.setAttribute(k, v === true ? '' : v);
     });
     for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    if (tag === 'input' && props && props.type === 'range') syncRange(el);
     return el;
   }
+  // Suwak: wypełnienie toru w CSS czyta --control-value, --attr-min i --attr-max
+  function syncRange(el) {
+    el.style.setProperty('--attr-min', el.min || 0);
+    el.style.setProperty('--attr-max', el.max || 100);
+    el.style.setProperty('--control-value', el.value);
+  }
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.type === 'range') syncRange(t); }, true);
   function add(el, c) {
     if (c === null || c === undefined || c === false) return;
     if (Array.isArray(c)) { c.forEach(function (x) { add(el, x); }); return; }
@@ -31,7 +39,14 @@
   var cleanups = [];
   UI.onLeave = function (fn) { cleanups.push(fn); };
   function runCleanups() { var c = cleanups; cleanups = []; c.forEach(function (fn) { try { fn(); } catch (e) { /* nic */ } }); }
-  function screen(id, cls) { runCleanups(); root.innerHTML = ''; var s = h('div', { class: 'screen ' + (cls || 'solid'), id: id }); root.appendChild(s); return s; }
+  var lastScreen = '';
+  function screen(id, cls) {
+    runCleanups(); root.innerHTML = '';
+    // animacja wejścia tylko przy przejściu na inny ekran, nie przy odświeżeniu tego samego
+    var s = h('div', { class: 'screen ' + (cls || 'solid') + (id !== lastScreen ? ' enter' : ''), id: id });
+    lastScreen = id;
+    root.appendChild(s); return s;
+  }
   function money(v) { return Math.round(v).toLocaleString('pl-PL') + ' tys. €'; }
   function flag(code, scale) { var c = h('canvas', { class: 'flag', style: 'vertical-align:middle' }); PG.drawFlag(c, code, scale || 2); return c; }
   function helmet(hm, scale) { var c = h('canvas', { class: 'helm' }); PG.drawHelmet(c, hm, scale || 3); return c; }
@@ -83,8 +98,9 @@
   function seg(options, value, onPick) {
     var wrap = h('div', { class: 'seg', role: 'group' });
     options.forEach(function (o) {
-      var b = h('button', { type: 'button', class: o[0] === value ? 'on' : '', text: o[1], onclick: function () {
-        Array.prototype.forEach.call(wrap.children, function (x) { x.classList.remove('on'); }); b.classList.add('on'); onPick(o[0]);
+      var b = h('button', { type: 'button', class: o[0] === value ? 'on' : '', 'aria-pressed': String(o[0] === value), text: o[1], onclick: function () {
+        Array.prototype.forEach.call(wrap.children, function (x) { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+        b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); onPick(o[0]);
       } });
       wrap.appendChild(b);
     });
@@ -97,7 +113,7 @@
     return row;
   }
   UI.toast = function (t) {
-    var el = h('div', { class: 'toast', text: t }); document.getElementById('app').appendChild(el);
+    var el = h('div', { class: 'toast', role: 'status', text: t }); document.getElementById('app').appendChild(el);
     setTimeout(function () { el.remove(); }, Math.max(1800, String(t).length * 55)); // dłuższe komunikaty dłużej na ekranie
   };
   function confirmInline(btn, label, onYes) {
@@ -1301,10 +1317,68 @@
       return;
     }
     if ((dir === 'left' || dir === 'right') && (cur.tagName === 'SELECT' || cur.type === 'range')) { padAdjust(cur, dir === 'right' ? 1 : -1, false); return; }
+    // najpierw element leżący wizualnie w danym kierunku (siatki kart, kolumny ustawień),
+    // a gdy w tę stronę nic nie ma, dawna kolejność listy z zawijaniem
+    var sp = spatialPick(cur, list, dir);
+    if (sp) { UI.padFocus(sp); return; }
     var j = (dir === 'up' || dir === 'left') ? i - 1 : i + 1;
     if (j < 0) j = list.length - 1; else if (j >= list.length) j = 0;
     UI.padFocus(list[j]);
   };
+  // Nawigacja przestrzenna: kandydat musi leżeć za krawędzią bieżącego elementu w danym kierunku;
+  // pierwszeństwo mają elementy w tym samym rzędzie/kolumnie, potem wynik odległość + 3 × przesunięcie w poprzek
+  function spatialPick(cur, list, dir) {
+    var a = cur.getBoundingClientRect(), tol = 2, best = null, bestAligned = false, bestGap = Infinity, bestOff = Infinity, bestScore = Infinity;
+    var horiz = dir === 'left' || dir === 'right';
+    for (var k = 0; k < list.length; k++) {
+      var el = list[k];
+      if (el === cur) continue;
+      if (el.checkVisibility && !el.checkVisibility()) continue;
+      var b = el.getBoundingClientRect();
+      if (!b.width && !b.height) continue;
+      var gap;
+      if (dir === 'right') { if (b.left < a.right - tol) continue; gap = b.left - a.right; }
+      else if (dir === 'left') { if (b.right > a.left + tol) continue; gap = a.left - b.right; }
+      else if (dir === 'down') { if (b.top < a.bottom - tol) continue; gap = b.top - a.bottom; }
+      else { if (b.bottom > a.top + tol) continue; gap = a.top - b.bottom; }
+      gap = Math.max(0, gap);
+      var aligned = horiz ? (b.top < a.bottom && b.bottom > a.top) : (b.left < a.right && b.right > a.left);
+      var off = horiz ? Math.abs((b.top + b.bottom) / 2 - (a.top + a.bottom) / 2) : Math.abs((b.left + b.right) / 2 - (a.left + a.right) / 2);
+      if (aligned) {
+        if (!bestAligned || gap < bestGap || (gap === bestGap && off < bestOff)) { best = el; bestAligned = true; bestGap = gap; bestOff = off; }
+      } else if (!bestAligned) {
+        var score = gap + 3 * off;
+        if (score < bestScore) { best = el; bestScore = score; }
+      }
+    }
+    return best;
+  }
+  // Strzałki na klawiaturze w menu działają jak krzyżak pada (pola tekstowe, listy i suwaki zachowują swoje strzałki)
+  var ARROW = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  document.addEventListener('keydown', function (e) {
+    var dir = ARROW[e.key];
+    if (!dir || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if ((G.mode === 'race' || G.mode === 'quali') && !G.paused) return;
+    var t = e.composedPath ? e.composedPath()[0] : e.target;
+    if (!t || !t.matches || t.matches(':read-write, select, input, textarea, [role="slider"]')) return;
+    var scr = topScreen();
+    if (!scr) return;
+    var list = focusables(scr);
+    if (t === document.body || t === document.documentElement) { // po zmianie ekranu fokus wraca na body: strzałka zaczyna od głównego przycisku
+      if (!list.length) return;
+      var first = scr.querySelector('button.primary:not([disabled])');
+      first = first && list.indexOf(first) >= 0 ? first : list[0];
+      e.preventDefault(); first.focus(); try { first.scrollIntoView({ block: 'nearest' }); } catch (e3) { /* nic */ }
+      return;
+    }
+    if (!scr.contains(t)) return;
+    if (list.indexOf(t) < 0) return;
+    var next = spatialPick(t, list, dir);
+    if (!next) return; // brak celu: przeglądarka przewija ekran
+    e.preventDefault();
+    if (padFocusEl) UI.padFocus(next);
+    else { next.focus(); try { next.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e2) { /* nic */ } }
+  });
   // mysz lub dotyk zdejmuje podświetlenie wyboru padem
   document.addEventListener('pointerdown', function () { if (padFocusEl) { padFocusEl.classList.remove('padfocus'); padFocusEl = null; } }, true);
 
