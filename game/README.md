@@ -1,5 +1,7 @@
 # WORLD GP
 
+> **Gra przeniosła się do repozytorium [danropl/world-gp](https://github.com/danropl/world-gp).** Ta kopia nie jest już aktualizowana. Skrypty `start.command` i `start.bat` z tego folderu same sklonują nowe repozytorium obok i uruchomią grę stamtąd.
+
 Wyścigowa gra F1 w przeglądarce: tor Monza odwzorowany z prawdziwej geometrii, pełny widok 3D (three.js), kwalifikacje, wyścig, pogoda, zużycie opon, DRS, uszkodzenia, dźwięk silników (klasyczny albo nagrania z paczki do F1 25, wtedy także rywali), tryb kariery (kierowca albo właściciel zespołu) i kreator kierowców, zespołów i malowań. Zespoły i kierowcy są fikcyjni, inspirowani stawką F1.
 
 Gra to czysty HTML + JavaScript bez budowania i bez zależności z npm. Biblioteki: three.js (MIT) w `js/vendor/three.min.js` i supabase-js (MIT, tylko dla multiplayer) w `js/vendor/supabase.js`.
