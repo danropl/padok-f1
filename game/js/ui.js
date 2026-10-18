@@ -319,13 +319,114 @@
     return box;
   }
   // Sterowanie padem (krótka ściąga)
-  function padControls() {
-    var kb = function (t) { return h('kbd', { text: t }); };
-    return h('div', { class: 'keys', style: 'font-size:14px;line-height:1.95' },
-      h('div', {}, kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
-      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('Options'), ' pauza'),
-      h('div', {}, 'Ręczna skrzynia: ', kb('R1'), ' / ', kb('L1'), ' bieg w górę / w dół   ', kb('✕'), ' DRS   ', kb('Create'), ' boks'),
-      h('div', {}, 'W menu: ', kb('krzyżak'), ' wybór   ', kb('✕'), ' zatwierdź   ', kb('○'), ' wstecz'));
+  // Schemat pada DualSense (PS5) z opisem sterowania; przełącznik pokazuje układ dla automatycznej albo ręcznej skrzyni
+  var PAD_PTS = { l2: [315, 52], r2: [505, 52], l1: [315, 76], r1: [505, 76], create: [338, 108], options: [482, 108], dpad: [300, 155],
+    tri: [520, 130], cir: [545, 155], cro: [520, 180], squ: [495, 155], ls: [355, 215], rs: [465, 215] };
+  function padMap(manual) {
+    return {
+      left: [['l2', 'L2', 'Hamulec'], ['l1', 'L1', manual ? 'Bieg w dół' : 'Zjazd do boksu'], ['create', 'Create', 'Zjazd do boksu'],
+        ['dpad', 'Krzyżak', 'Opony w boksie ▲▼'], ['ls', 'L-gałka', manual ? 'Skręt · L3: boks' : 'Skręt']],
+      right: [['r2', 'R2', 'Gaz'], ['r1', 'R1', manual ? 'Bieg w górę' : 'DRS'], ['options', 'Options', 'Pauza'],
+        ['tri', '△', 'Zmiana kamery'], ['cir', '○', 'Powrót na tor · wstecz'], ['cro', '✕', 'DRS · zatwierdź'], ['squ', '□', 'Patrz do tyłu']]
+    };
+  }
+  function padSvg(manual) {
+    var m = padMap(manual), used = {}, out = [];
+    m.left.concat(m.right).forEach(function (r) { used[r[0]] = 1; });
+    var u = function (k) { return used[k] ? ' on' : ''; };
+    var P = PAD_PTS;
+    out.push('<svg viewBox="-40 0 900 330" role="img" aria-labelledby="padTitle"><title id="padTitle">Schemat pada DualSense ze sterowaniem</title>');
+    // ramiona i spusty
+    out.push('<rect class="pb' + u('l2') + '" x="282" y="40" width="66" height="22" rx="7"/><rect class="pb' + u('r2') + '" x="472" y="40" width="66" height="22" rx="7"/>');
+    out.push('<rect class="pb' + u('l1') + '" x="284" y="70" width="62" height="10" rx="4"/><rect class="pb' + u('r1') + '" x="474" y="70" width="62" height="10" rx="4"/>');
+    // korpus
+    out.push('<path class="body" d="M330 82H490C550 82 575 102 585 142L620 272C630 317 590 337 565 307L520 252H300L255 307C230 337 190 317 200 272L235 142C245 102 270 82 330 82Z"/>');
+    out.push('<rect class="pad-touch" x="352" y="94" width="116" height="62" rx="8"/>');
+    out.push('<rect class="pb' + u('create') + '" x="331" y="100" width="14" height="18" rx="5"/><rect class="pb' + u('options') + '" x="475" y="100" width="14" height="18" rx="5"/>');
+    // krzyżak
+    out.push('<path class="pb' + u('dpad') + '" d="M292 133h16v14h14v16h-14v14h-16v-14h-14v-16h14z"/>');
+    // przyciski akcji
+    [['tri', '△'], ['cir', '○'], ['cro', '✕'], ['squ', '□']].forEach(function (b) {
+      out.push('<circle class="pb' + u(b[0]) + '" cx="' + P[b[0]][0] + '" cy="' + P[b[0]][1] + '" r="12"/><text class="sym" x="' + P[b[0]][0] + '" y="' + (P[b[0]][1] + 5) + '">' + b[1] + '</text>');
+    });
+    // gałki i PS
+    out.push('<circle class="pb' + u('ls') + '" cx="355" cy="215" r="23"/><circle class="stk" cx="355" cy="215" r="13"/><circle class="pb" cx="465" cy="215" r="23"/><circle class="stk" cx="465" cy="215" r="13"/><circle class="pb" cx="410" cy="212" r="8"/>');
+    // opisy z liniami
+    var row = function (r, k, side) {
+      var y = side === 'l' ? 26 + k * 60 : 22 + k * 46, t = P[r[0]], x0 = side === 'l' ? 196 : 624, x1 = side === 'l' ? 222 : 598;
+      out.push('<polyline class="ld" points="' + x0 + ',' + (y - 5) + ' ' + x1 + ',' + (y - 5) + ' ' + t[0] + ',' + t[1] + '"/><circle class="ldot" cx="' + t[0] + '" cy="' + t[1] + '" r="3"/>');
+      out.push('<text class="lbl ' + side + '" x="' + (side === 'l' ? 188 : 632) + '" y="' + y + '"><tspan class="btn">' + r[1] + '</tspan><tspan dx="8">' + r[2].replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</tspan></text>');
+    };
+    m.left.forEach(function (r, k) { row(r, k, 'l'); });
+    m.right.forEach(function (r, k) { row(r, k, 'r'); });
+    out.push('</svg>');
+    return out.join('');
+  }
+  function padDiagram(st) {
+    var manual = st.gearbox === 'manual';
+    var fig = h('figure', { class: 'padfig' }), pic = h('div', { class: 'padpic' }), list = h('dl', { class: 'padlist' });
+    function draw() {
+      pic.innerHTML = padSvg(manual);
+      list.innerHTML = '';
+      var m = padMap(manual);
+      m.left.concat(m.right).forEach(function (r) { list.appendChild(h('dt', {}, h('kbd', { text: r[1] }))); list.appendChild(h('dd', { text: r[2] })); });
+    }
+    fig.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' }, h('h3', { text: 'Schemat pada PS5' }),
+      seg([[false, 'Automatyczna skrzynia'], [true, 'Ręczna skrzynia']], manual, function (v) { manual = v; draw(); })));
+    fig.appendChild(pic); fig.appendChild(list);
+    fig.appendChild(h('figcaption', { class: 'muted', style: 'font-size:13px', text: 'W menu: krzyżak lub lewa gałka wybiera, ✕ zatwierdza, ○ wraca. Pad Xbox: te same miejsca (A = ✕, B = ○, X = □, Y = △, View = Create, Menu = Options).' }));
+    draw();
+    return fig;
+  }
+  // Edytor klawiszy: klik na pole, potem nowy klawisz; Backspace czyści, Esc anuluje. Zapis w ciasteczku przeglądarki.
+  function keyEditor() {
+    var K = PG.Keys, panel = h('div', { class: 'panel col' }, h('h3', { text: 'Sterowanie' }));
+    var table = h('div', { class: 'keymap', role: 'table', 'aria-label': 'Przypisanie klawiszy' });
+    var waiting = null;
+    function stop() {
+      if (!waiting) return;
+      window.removeEventListener('keydown', onKey, true);
+      K.capturing = false; waiting.btn.classList.remove('wait'); waiting = null; draw();
+    }
+    function onKey(e) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      var w = waiting; if (!w) return;
+      if (e.code === 'Escape') { stop(); return; }
+      if (e.code === 'Backspace' || e.code === 'Delete') K.clear(w.action, w.slot);
+      else if (e.code) K.set(w.action, w.slot, e.code);
+      var f = w.action + w.slot; stop();
+      var b = table.querySelector('[data-k="' + f + '"]'); if (b) b.focus();
+    }
+    function start(btn, action, slot) {
+      if (waiting) stop();
+      btn = table.querySelector('[data-k="' + action + slot + '"]') || btn;
+      waiting = { btn: btn, action: action, slot: slot };
+      K.capturing = true; btn.classList.add('wait'); btn.textContent = 'Naciśnij klawisz…';
+      window.addEventListener('keydown', onKey, true);
+    }
+    function draw() {
+      table.innerHTML = '';
+      table.appendChild(h('div', { class: 'kr head', role: 'row' }, h('span', { role: 'columnheader', text: 'Akcja' }), h('span', { role: 'columnheader', text: 'Klawisz' }), h('span', { role: 'columnheader', text: 'Drugi klawisz' })));
+      K.ACTIONS.forEach(function (a) {
+        var r = h('div', { class: 'kr', role: 'row' }, h('span', { role: 'rowheader', text: a[1] }));
+        [0, 1].forEach(function (slot) {
+          var code = K.map[a[0]][slot];
+          var b = h('button', { type: 'button', class: 'keycap' + (code ? '' : ' empty'), 'data-k': a[0] + slot, 'aria-label': a[1] + ', ' + (slot ? 'drugi klawisz' : 'klawisz') + ': ' + K.label(code) + '. Zmień', text: K.label(code) });
+          b.addEventListener('click', function (e) { e.stopPropagation(); start(b, a[0], slot); });
+          r.appendChild(h('span', { role: 'cell' }, b));
+        });
+        table.appendChild(r);
+      });
+    }
+    draw();
+    var outside = function (e) { if (waiting && !waiting.btn.contains(e.target)) stop(); };
+    document.addEventListener('pointerdown', outside, true);
+    UI.onLeave(function () { stop(); document.removeEventListener('pointerdown', outside, true); });
+    var reset = h('button', { type: 'button', class: 'small', text: 'Przywróć domyślne', onclick: function () { stop(); K.reset(); draw(); UI.toast('Przywrócono domyślne klawisze'); } });
+    panel.appendChild(note('Kliknij pole i naciśnij nowy klawisz. Backspace czyści pole, Esc anuluje. Klawisz zajęty przez inną akcję zamienia się z nią miejscami. Przypisania zapisują się w ciasteczku tej przeglądarki, nie na serwerze.'));
+    panel.appendChild(table);
+    panel.appendChild(h('div', { class: 'row', style: 'justify-content:space-between' }, reset, h('span', { class: 'muted', style: 'font-size:13px', text: 'C z Shiftem zmienia kamerę wstecz. Na telefonie działa sterowanie dotykowe.' })));
+    return panel;
   }
   function padStatus() {
     var P = PG.Pad, H = PG.Haptics;
@@ -431,7 +532,7 @@
     } else if (D) {
       kp.appendChild(note('Adaptacyjne spusty DualSense wymagają Chrome albo Edge (WebHID) i gry otwartej z adresu localhost albo https. W tej przeglądarce działają tylko zwykłe wibracje.'));
     }
-    kp.appendChild(padControls());
+    kp.appendChild(padDiagram(st));
     g2.appendChild(kp);
     // odświeżanie nazwy pada i stanu WebHID
     var lastHid = D && D.connected ? D.connected() : false;
@@ -463,17 +564,8 @@
     dp.appendChild(h('div', { class: 'row' }, del));
     g2.appendChild(dp);
 
-    // sterowanie
-    var kb = function (t) { return h('kbd', { text: t }); };
-    g2.appendChild(h('div', { class: 'panel col' }, h('h3', { text: 'Sterowanie' }), h('div', { class: 'keys' },
-      h('div', {}, kb('↑'), ' / ', kb('W'), ' gaz   ', kb('↓'), ' / ', kb('S'), ' hamulec   ', kb('←'), kb('→'), ' skręt'),
-      h('div', {}, kb('E'), ' DRS   ', kb('R'), ' powrót na tor   ', kb('Esc'), ' pauza   ', kb('M'), ' dźwięk'),
-      h('div', {}, kb('C'), ' kamera   ', kb('V'), ' patrz do tyłu   ', kb('B'), ' zjazd do boksu   ', kb('1'), '–', kb('4'), ' opony'),
-      h('div', {}, kb('X'), ' / ', kb('Z'), ' bieg w górę / w dół (ręczna skrzynia)'),
-      h('div', {}, 'Pad (DualSense i inne): ', kb('L-gałka'), ' skręt   ', kb('R2'), ' gaz   ', kb('L2'), ' hamulec   ', kb('R1'), ' / ', kb('✕'), ' DRS'),
-      h('div', {}, kb('△'), ' kamera   ', kb('□'), ' patrz do tyłu   ', kb('○'), ' powrót na tor   ', kb('L1'), ' / ', kb('Create'), ' boks   ', kb('Options'), ' pauza'),
-      h('div', {}, 'Ręczna skrzynia na padzie: ', kb('R1'), ' / ', kb('L1'), ' biegi   ', kb('✕'), ' DRS   ', kb('Create'), ' / ', kb('L3'), ' boks'),
-      h('div', {}, 'Na telefonie działa sterowanie dotykowe.'))));
+    // sterowanie: przypisanie klawiszy (zapis w ciasteczku)
+    g2.appendChild(keyEditor());
 
     w.appendChild(sectionTabs(g2, ['display', 'wheel', 'pad', 'sound', 'keys'], 'settings'));
     s.appendChild(w);

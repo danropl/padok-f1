@@ -244,26 +244,30 @@
   };
 
   // ---------- STEROWANIE (klawiatura i dotyk) ----------
-  var KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', KeyE: 'drs', ShiftLeft: 'drs', ShiftRight: 'drs', Space: 'drs', KeyV: 'back' };
+  // Klawisze z PG.Keys (ustawienia → Sterowanie, zapis w ciasteczku); jazda: up/down/left/right/drs/back trzymane
+  var HELD = { up: 1, down: 1, left: 1, right: 1, drs: 1, back: 1 };
+  var TYRE = { tyreS: 'S', tyreM: 'M', tyreH: 'H', tyreW: 'W' };
   G.bindInput = function () {
     window.addEventListener('keydown', function (e) {
       G.focused = true;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
-      var k = KEYS[e.code];
+      if (PG.Keys.capturing) return; // ustawienia czekają na nowy klawisz
+      var a = PG.Keys.action(e.code);
       if (G.mode === 'race' || G.mode === 'quali') {
-        if (k && !G.netMenu) { G.input[k] = true; e.preventDefault(); }
-        if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) { G.togglePause(); e.preventDefault(); }
-        if (e.code === 'KeyR' && !e.repeat) G.resetPlayer();
-        if (e.code === 'KeyC' && !e.repeat && !G.paused) G.cycleCamera(e.shiftKey ? -1 : 1);
-        if (e.code === 'KeyB' && !e.repeat && !G.paused) G.toggleBox();
-        if ((e.code === 'KeyX' || e.code === 'NumpadAdd') && !e.repeat) G.shift(1);
-        if ((e.code === 'KeyZ' || e.code === 'NumpadSubtract') && !e.repeat) G.shift(-1);
-        var dig = { Digit1: 'S', Digit2: 'M', Digit3: 'H', Digit4: 'W', Numpad1: 'S', Numpad2: 'M', Numpad3: 'H', Numpad4: 'W' }[e.code];
-        if (dig && !e.repeat && !G.paused) G.pickComp(dig);
+        if (a && HELD[a] && !G.netMenu) { G.input[a] = true; e.preventDefault(); }
+        if (a && !e.repeat) {
+          if (a === 'pause') { G.togglePause(); e.preventDefault(); }
+          else if (a === 'reset') G.resetPlayer();
+          else if (a === 'camera' && !G.paused) G.cycleCamera(e.shiftKey ? -1 : 1);
+          else if (a === 'box' && !G.paused) G.toggleBox();
+          else if (a === 'shiftUp') G.shift(1);
+          else if (a === 'shiftDown') G.shift(-1);
+          else if (TYRE[a] && !G.paused) G.pickComp(TYRE[a]);
+        }
       }
-      if (e.code === 'KeyM' && !e.repeat) { var st = PG.Store.data.settings; st.sound = !st.sound; PG.Audio.setOn(st.sound); PG.Store.save(); }
+      if (a === 'sound' && !e.repeat) { var st = PG.Store.data.settings; st.sound = !st.sound; PG.Audio.setOn(st.sound); PG.Store.save(); }
     });
-    window.addEventListener('keyup', function (e) { var k = KEYS[e.code]; if (k) G.input[k] = false; });
+    window.addEventListener('keyup', function (e) { var a = PG.Keys.action(e.code); if (a && HELD[a]) G.input[a] = false; });
     window.addEventListener('blur', function () { G.input = {}; G.focused = false; G.stopHaptics(); });
     window.addEventListener('focus', function () { G.focused = true; });
     window.addEventListener('pointerdown', function () { G.focused = true; }, true);

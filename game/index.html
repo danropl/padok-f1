@@ -150,12 +150,12 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-family: var(--font-
 .menu-layout { flex: 1; display: grid; grid-template-rows: auto 1fr auto auto; gap: 18px; min-height: 100%; max-width: 1240px; width: 100%; margin-inline: auto; box-sizing: border-box; padding-bottom: 44px; }
 /* lista trybów: numer, nazwa kursywą, opis; bez kart, cienkie linie jak w arkuszu czasów */
 .menu-list { grid-row: 3; display: flex; flex-direction: column; width: min(680px, 100%); border-top: 1px solid rgb(244 241 234 / 0.18); }
-.mi { display: grid; grid-template-columns: 3rem auto 1fr; align-items: baseline; column-gap: 18px; padding: 14px 18px 14px 8px; background: transparent; border: 0; border-bottom: 1px solid rgb(244 241 234 / 0.18); border-radius: 0; isolation: isolate; }
-.mi .n { font-size: 18px; color: var(--muted); letter-spacing: 0.04em; }
-.mi .tt { font-size: clamp(24px, 2.4vw, 32px); font-weight: 900; font-style: italic; line-height: 1.05; letter-spacing: -0.01em; transition: translate 180ms var(--ease-out); }
+.mi { display: grid; grid-template-columns: 3rem auto 1fr; align-items: center; column-gap: 18px; padding: 14px 18px 14px 8px; background: transparent; border: 0; border-bottom: 1px solid rgb(244 241 234 / 0.18); border-radius: 0; isolation: isolate; }
+.mi .n { font-family: var(--font-ui); font-size: 18px; font-weight: 700; font-style: italic; line-height: 1; font-variant-numeric: tabular-nums lining-nums; color: var(--muted); letter-spacing: 0.02em; text-align: right; }
+.mi .tt { font-size: clamp(24px, 2.4vw, 32px); font-weight: 900; font-style: italic; line-height: 1.05; letter-spacing: -0.01em; }
 .mi small { justify-self: end; text-align: right; font-size: 15px; font-weight: 400; color: var(--muted); }
 .mi:hover, .mi:focus-visible, .mi.padfocus { background: rgb(244 241 234 / 0.07); border-color: rgb(244 241 234 / 0.18); }
-.mi:hover .tt, .mi:focus-visible .tt, .mi.padfocus .tt { translate: 8px 0; }
+
 .mi:hover .n, .mi:focus-visible .n, .mi.padfocus .n { color: var(--amber); }
 /* główny tryb: ścięty czerwony pas za nazwą, jak belka grafiki TV */
 .mi.primary { background: transparent; border-color: rgb(244 241 234 / 0.18); padding-block: 22px; }
@@ -165,7 +165,7 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-family: var(--font-
 .mi.primary .tt { font-size: clamp(30px, 3.2vw, 42px); }
 .mi.primary:hover::before, .mi.primary.padfocus::before, .mi.primary:focus-visible::before { background: var(--red-hi); }
 .mi.primary:hover, .mi.primary.padfocus, .mi.primary:focus-visible { background: transparent; }
-@media (max-width: 600px) { .mi { grid-template-columns: 2.4rem 1fr; row-gap: 2px; } .mi small { grid-column: 2; justify-self: start; text-align: left; } }
+@media (max-width: 600px) { .mi { grid-template-columns: 2.4rem 1fr; row-gap: 2px; } .mi .n { grid-row: 1 / span 2; align-self: start; padding-top: 0.45em; } .mi small { grid-column: 2; justify-self: start; text-align: left; } }
 .menu-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .menu-top .ver { margin-top: 12px; font-size: 15px; color: var(--muted); letter-spacing: 0.06em; }
 .menu-foot { grid-row: 4; font-size: 13px; }
@@ -224,6 +224,32 @@ html.pad .hints .hp { display: inline; }
 #pause { padding: 0 !important; }
 #pause > .panel { max-width: 460px !important; min-height: 100%; margin: 0 !important; box-sizing: border-box; border-radius: 0; border-width: 0 1px 0 0; padding: max(28px, env(safe-area-inset-top, 0px)) 28px 80px; background: rgb(16 15 14 / 0.96); animation: sheetIn 260ms var(--ease-out) both !important; }
 @keyframes sheetIn { from { transform: translateX(-30px); opacity: 0; } }
+/* Schemat pada: SVG z opisami; w wąskim panelu (container query) opisy jako lista pod rysunkiem */
+.padfig { margin: 0; display: flex; flex-direction: column; gap: 10px; container-type: inline-size; }
+.padpic svg { display: block; width: 100%; height: auto; font-family: var(--font-ui); }
+.padpic .body { fill: #2b2a27; stroke: #5d5a52; stroke-width: 2; }
+.padpic .pad-touch { fill: #23221f; stroke: #4a4741; stroke-width: 1.5; }
+.padpic .pb { fill: #1b1a18; stroke: #5d5a52; stroke-width: 1.5; }
+.padpic .pb.on { stroke: var(--amber); stroke-width: 2; }
+.padpic .stk { fill: #11100f; stroke: #4a4741; }
+.padpic .sym { fill: var(--ink); font-size: 14px; font-weight: 700; text-anchor: middle; }
+.padpic .ld { fill: none; stroke: rgb(244 241 234 / 0.35); stroke-width: 1; }
+.padpic .ldot { fill: var(--amber); }
+.padpic .lbl { fill: var(--ink); font-size: 17px; font-weight: 600; }
+.padpic .lbl.l { text-anchor: end; }
+.padpic .lbl .btn { fill: var(--amber); font-family: var(--font-num); font-weight: 700; }
+.padlist { display: none; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 15px; align-items: center; }
+.padlist dd { margin: 0; color: var(--ink); }
+@container (max-width: 600px) { .padpic .lbl, .padpic .ld, .padpic .ldot { display: none; } .padpic svg { max-width: 360px; margin-inline: auto; } .padlist { display: grid; } }
+/* Edytor klawiszy */
+.keymap { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; font-size: 15px; }
+.keymap .kr { display: contents; }
+.keymap .kr > span { display: flex; align-items: center; padding: 5px 8px; border-bottom: 1px solid rgb(244 241 234 / 0.08); }
+.keymap .kr.head > span { font-family: var(--font-num); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.keycap { min-width: 104px; justify-content: center; text-align: center; font-family: var(--font-num); font-size: 16px; font-weight: 700; padding: 5px 12px; min-block-size: 34px; background: #1d1c1a; border-bottom-width: 3px; }
+.keycap.empty { color: var(--muted); font-weight: 400; }
+.keycap.wait { border-color: var(--amber); color: var(--amber); background: color-mix(in oklab, var(--amber) 12%, #1d1c1a); }
+@media (max-width: 520px) { .keycap { min-width: 72px; } }
 .keys { font-size: 15px; color: var(--muted); line-height: 1.9; }
 kbd { font-family: var(--font-ui); font-size: 14px; font-weight: 700; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; background: #1d1c1a; color: var(--ink); }
 
@@ -431,30 +457,31 @@ canvas.car3d { border-radius: 6px; }
   <div id="ui"></div>
 </div>
 
-<script src="js/vendor/three.min.js?v=2026.10.18.9"></script>
-<script src="js/data.js?v=2026.10.18.9"></script>
-<script src="js/track.js?v=2026.10.18.9"></script>
-<script src="js/physics.js?v=2026.10.18.9"></script>
-<script src="js/session.js?v=2026.10.18.9"></script>
-<script src="js/quali.js?v=2026.10.18.9"></script>
-<script src="js/pit.js?v=2026.10.18.9"></script>
-<script src="js/racecontrol.js?v=2026.10.18.9"></script>
-<script src="js/sprites.js?v=2026.10.18.9"></script>
-<script src="js/render.js?v=2026.10.18.9"></script>
-<script src="js/engines.js?v=2026.10.18.9"></script>
-<script src="js/enginepack.js?v=2026.10.18.9"></script>
-<script src="js/audio.js?v=2026.10.18.9"></script>
-<script src="js/career.js?v=2026.10.18.9"></script>
-<script src="js/car3d.js?v=2026.10.18.9"></script>
-<script src="js/cockpit3d.js?v=2026.10.18.9"></script>
-<script src="js/trees3d.js?v=2026.10.18.9"></script>
-<script src="js/world3d-lite.js?v=2026.10.18.9"></script>
-<script src="js/post3d.js?v=2026.10.18.9"></script>
-<script src="js/view3d.js?v=2026.10.18.9"></script>
-<script src="js/input.js?v=2026.10.18.9"></script>
-<script src="js/game.js?v=2026.10.18.9"></script>
-<script src="js/ui.js?v=2026.10.18.9"></script>
-<script src="js/net.js?v=2026.10.18.9"></script>
-<script src="js/multi.js?v=2026.10.18.9"></script>
+<script src="js/vendor/three.min.js?v=2026.10.18.10"></script>
+<script src="js/data.js?v=2026.10.18.10"></script>
+<script src="js/keys.js?v=2026.10.18.10"></script>
+<script src="js/track.js?v=2026.10.18.10"></script>
+<script src="js/physics.js?v=2026.10.18.10"></script>
+<script src="js/session.js?v=2026.10.18.10"></script>
+<script src="js/quali.js?v=2026.10.18.10"></script>
+<script src="js/pit.js?v=2026.10.18.10"></script>
+<script src="js/racecontrol.js?v=2026.10.18.10"></script>
+<script src="js/sprites.js?v=2026.10.18.10"></script>
+<script src="js/render.js?v=2026.10.18.10"></script>
+<script src="js/engines.js?v=2026.10.18.10"></script>
+<script src="js/enginepack.js?v=2026.10.18.10"></script>
+<script src="js/audio.js?v=2026.10.18.10"></script>
+<script src="js/career.js?v=2026.10.18.10"></script>
+<script src="js/car3d.js?v=2026.10.18.10"></script>
+<script src="js/cockpit3d.js?v=2026.10.18.10"></script>
+<script src="js/trees3d.js?v=2026.10.18.10"></script>
+<script src="js/world3d-lite.js?v=2026.10.18.10"></script>
+<script src="js/post3d.js?v=2026.10.18.10"></script>
+<script src="js/view3d.js?v=2026.10.18.10"></script>
+<script src="js/input.js?v=2026.10.18.10"></script>
+<script src="js/game.js?v=2026.10.18.10"></script>
+<script src="js/ui.js?v=2026.10.18.10"></script>
+<script src="js/net.js?v=2026.10.18.10"></script>
+<script src="js/multi.js?v=2026.10.18.10"></script>
 
 </body></html>
